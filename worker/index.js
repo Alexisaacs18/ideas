@@ -916,7 +916,7 @@ async function handleGetDocuments(request, env) {
     }
     
     const documents = await env.DB.prepare(
-      'SELECT id, filename, upload_date, size_bytes FROM documents WHERE user_id = ? ORDER BY upload_date DESC'
+      'SELECT id, filename, upload_date, size_bytes, doc_type, source_url FROM documents WHERE user_id = ? ORDER BY upload_date DESC'
     ).bind(userId).all();
     
     return new Response(
@@ -928,6 +928,330 @@ async function handleGetDocuments(request, env) {
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// API Endpoint: Add link
+async function handleAddLink(request, env) {
+  try {
+    // Check for API key
+    let apiKey = env.HUGGINGFACE;
+    if (!apiKey && env['Hugging Face']) {
+      apiKey = env['Hugging Face'];
+    }
+    if (!apiKey || (typeof apiKey === 'string' && apiKey.trim() === '')) {
+      return new Response(
+        JSON.stringify({ error: 'HuggingFace API key not configured' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const body = await parseJSON(request);
+    const { url: linkUrl, user_id: userId } = body;
+
+    if (!linkUrl || !userId) {
+      return new Response(
+        JSON.stringify({ error: 'URL and user_id are required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate URL
+    try {
+      new URL(linkUrl);
+    } catch (e) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid URL format' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check document limit
+    const docCount = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM documents WHERE user_id = ?'
+    ).bind(userId).first();
+    
+    if (docCount && docCount.count >= 50) {
+      return new Response(
+        JSON.stringify({ error: 'Document limit reached (50 documents per user)' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('=== LINK PROCESSING ===');
+    console.log('Fetching URL:', linkUrl);
+
+    // Fetch the webpage
+    const response = await fetch(linkUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DocumentBot/1.0)',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    console.log('HTML fetched, length:', html.length);
+
+    // Extract text from HTML (basic version)
+    let text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    console.log('Extracted text length:', text.length);
+
+    // Get title from HTML
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : new URL(linkUrl).hostname;
+
+    if (text.length < 100) {
+      return new Response(
+        JSON.stringify({ error: 'Could not extract enough text from URL. The page may require JavaScript or be behind authentication.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Chunk text
+    const chunks = chunkText(text, 1500, 100);
+    
+    if (chunks.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No text chunks created from URL' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Enforce maximum chunk limit
+    const MAX_CHUNKS = 50;
+    if (chunks.length > MAX_CHUNKS) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Content too large', 
+          message: `This URL would create ${chunks.length} chunks. Maximum is ${MAX_CHUNKS}.`
+        }), 
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Generate embeddings in batches
+    const BATCH_SIZE = 10;
+    const embeddings = [];
+    let lastError = null;
+
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batch = chunks.slice(i, i + BATCH_SIZE);
+      try {
+        const batchEmbeddings = await getEmbeddings(batch, apiKey);
+        for (let j = 0; j < batch.length; j++) {
+          embeddings.push({
+            chunk: batch[j],
+            embedding: JSON.stringify(batchEmbeddings[j]),
+            index: i + j,
+          });
+        }
+        if (i + BATCH_SIZE < chunks.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      } catch (error) {
+        console.error(`Error generating embeddings for batch starting at ${i}:`, error);
+        lastError = error;
+      }
+    }
+
+    if (embeddings.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to generate embeddings',
+          details: lastError ? lastError.message : 'Unknown error'
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Store document
+    const documentId = generateId();
+    await env.DB.prepare(
+      'INSERT INTO documents (id, user_id, filename, file_path, upload_date, size_bytes, doc_type, source_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      documentId,
+      userId,
+      title,
+      linkUrl,
+      Math.floor(Date.now() / 1000),
+      text.length,
+      'link',
+      linkUrl
+    ).run();
+
+    // Store embeddings in batch
+    const embeddingStatements = embeddings.map(e => 
+      env.DB.prepare(
+        'INSERT INTO embeddings (id, document_id, chunk_text, embedding, chunk_index) VALUES (?, ?, ?, ?, ?)'
+      ).bind(generateId(), documentId, e.chunk, e.embedding, e.index)
+    );
+
+    await env.DB.batch(embeddingStatements);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        document_id: documentId,
+        filename: title,
+        chunks: chunks.length
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Link processing error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Failed to process link' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// API Endpoint: Add text snippet
+async function handleAddText(request, env) {
+  try {
+    // Check for API key
+    let apiKey = env.HUGGINGFACE;
+    if (!apiKey && env['Hugging Face']) {
+      apiKey = env['Hugging Face'];
+    }
+    if (!apiKey || (typeof apiKey === 'string' && apiKey.trim() === '')) {
+      return new Response(
+        JSON.stringify({ error: 'HuggingFace API key not configured' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const body = await parseJSON(request);
+    const { title, content, user_id: userId } = body;
+
+    if (!content || !userId) {
+      return new Response(
+        JSON.stringify({ error: 'Content and user_id are required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check document limit
+    const docCount = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM documents WHERE user_id = ?'
+    ).bind(userId).first();
+    
+    if (docCount && docCount.count >= 50) {
+      return new Response(
+        JSON.stringify({ error: 'Document limit reached (50 documents per user)' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('=== TEXT SNIPPET PROCESSING ===');
+    console.log('Title:', title || 'Untitled note');
+    console.log('Content length:', content.length);
+
+    // Chunk text
+    const chunks = chunkText(content, 1500, 100);
+    
+    if (chunks.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No text chunks created' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Enforce maximum chunk limit
+    const MAX_CHUNKS = 50;
+    if (chunks.length > MAX_CHUNKS) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Text too large', 
+          message: `This text would create ${chunks.length} chunks. Maximum is ${MAX_CHUNKS}.`
+        }), 
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Generate embeddings in batches
+    const BATCH_SIZE = 10;
+    const embeddings = [];
+    let lastError = null;
+
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batch = chunks.slice(i, i + BATCH_SIZE);
+      try {
+        const batchEmbeddings = await getEmbeddings(batch, apiKey);
+        for (let j = 0; j < batch.length; j++) {
+          embeddings.push({
+            chunk: batch[j],
+            embedding: JSON.stringify(batchEmbeddings[j]),
+            index: i + j,
+          });
+        }
+        if (i + BATCH_SIZE < chunks.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      } catch (error) {
+        console.error(`Error generating embeddings for batch starting at ${i}:`, error);
+        lastError = error;
+      }
+    }
+
+    if (embeddings.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to generate embeddings',
+          details: lastError ? lastError.message : 'Unknown error'
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Store document
+    const documentId = generateId();
+    const docTitle = title || 'Untitled note';
+    await env.DB.prepare(
+      'INSERT INTO documents (id, user_id, filename, file_path, upload_date, size_bytes, doc_type) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      documentId,
+      userId,
+      docTitle,
+      'text-snippet',
+      Math.floor(Date.now() / 1000),
+      content.length,
+      'text'
+    ).run();
+
+    // Store embeddings in batch
+    const embeddingStatements = embeddings.map(e => 
+      env.DB.prepare(
+        'INSERT INTO embeddings (id, document_id, chunk_text, embedding, chunk_index) VALUES (?, ?, ?, ?, ?)'
+      ).bind(generateId(), documentId, e.chunk, e.embedding, e.index)
+    );
+
+    await env.DB.batch(embeddingStatements);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        document_id: documentId,
+        filename: docTitle,
+        chunks: chunks.length
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Text save error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Failed to save text' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
@@ -1013,6 +1337,10 @@ export default {
         response = await handleChat(request, env);
       } else if (path === '/api/documents' && request.method === 'GET') {
         response = await handleGetDocuments(request, env);
+      } else if (path === '/api/documents/link' && request.method === 'POST') {
+        response = await handleAddLink(request, env);
+      } else if (path === '/api/documents/text' && request.method === 'POST') {
+        response = await handleAddText(request, env);
       } else if (path.startsWith('/api/documents/') && request.method === 'DELETE') {
         response = await handleDeleteDocument(request, env);
       } else if (path === '/api/debug/secret' && request.method === 'GET') {
@@ -1047,6 +1375,8 @@ export default {
             endpoints: {
               'POST /api/auth/register': 'Register a new user',
               'POST /api/upload': 'Upload a document (PDF/TXT)',
+              'POST /api/documents/link': 'Add a link (URL)',
+              'POST /api/documents/text': 'Add a text snippet',
               'POST /api/chat': 'Send a chat message',
               'GET /api/documents?user_id=X': 'List documents for a user',
               'DELETE /api/documents/:id': 'Delete a document',
@@ -1057,10 +1387,22 @@ export default {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       } else {
-        response = new Response(
-          JSON.stringify({ error: 'Not found', path: path }),
-          { status: 404, headers: { 'Content-Type': 'application/json' } }
-        );
+        // For non-API routes (like /documents, /, etc.), return a simple message
+        // These are handled by React Router on the frontend
+        if (!path.startsWith('/api')) {
+          response = new Response(
+            JSON.stringify({ 
+              message: 'This is an API endpoint. Use the frontend application for UI routes.',
+              path: path 
+            }),
+            { status: 404, headers: { 'Content-Type': 'application/json' } }
+          );
+        } else {
+          response = new Response(
+            JSON.stringify({ error: 'Not found', path: path }),
+            { status: 404, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
       }
       
       return addCorsHeaders(response);

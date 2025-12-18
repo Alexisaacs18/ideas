@@ -85,5 +85,31 @@ export const api = {
     }
     return response.json();
   },
+
+  async addLink(url, userId) {
+    const response = await fetch(`${API_BASE_URL}/api/documents/link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, user_id: userId }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to add link');
+    }
+    return response.json();
+  },
+
+  async addText(title, content, userId) {
+    const response = await fetch(`${API_BASE_URL}/api/documents/text`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, content, user_id: userId }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to save text');
+    }
+    return response.json();
+  },
 };
 

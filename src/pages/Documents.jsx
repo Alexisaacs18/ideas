@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { FileText, Trash2, Upload } from 'lucide-react';
+import { FileText, Trash2, Upload, Link as LinkIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Toaster, toast } from 'react-hot-toast';
 import MainSidebar from '../components/MainSidebar';
@@ -19,6 +19,11 @@ export default function Documents() {
   const [documents, setDocuments] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [activeTab, setActiveTab] = useState('upload');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [textContent, setTextContent] = useState('');
+  const [textTitle, setTextTitle] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [mainSidebarOpen, setMainSidebarOpen] = useState(() => {
     const stored = localStorage.getItem('sidebarOpen');
     return stored ? JSON.parse(stored) : false;
@@ -172,6 +177,47 @@ export default function Documents() {
     }
   };
 
+  const handleLinkSubmit = async () => {
+    if (!linkUrl.trim()) {
+      toast.error('Please enter a URL');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await api.addLink(linkUrl, userId);
+      toast.success('Link added successfully!');
+      setLinkUrl('');
+      await loadDocuments();
+    } catch (error) {
+      toast.error(error.message || 'Failed to add link');
+      console.error('Link submission error:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleTextSubmit = async () => {
+    if (!textContent.trim()) {
+      toast.error('Please enter some text');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await api.addText(textTitle || 'Untitled note', textContent, userId);
+      toast.success('Text saved successfully!');
+      setTextContent('');
+      setTextTitle('');
+      await loadDocuments();
+    } catch (error) {
+      toast.error(error.message || 'Failed to save text');
+      console.error('Text submission error:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem('sidebarOpen', JSON.stringify(mainSidebarOpen));
   }, [mainSidebarOpen]);
@@ -211,25 +257,138 @@ export default function Documents() {
               <h1 className="text-2xl font-semibold text-text-primary">My Documents</h1>
             </div>
           
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-text-secondary">
-                {documents.length} / 50 documents
-              </p>
+            {/* Tabs */}
+            <div className="flex gap-1 mb-4 border-b border-border/50">
               <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={documents.length >= 50 || uploading}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg gradient-accent text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                  activeTab === 'upload'
+                    ? 'bg-surface text-text-primary border-t border-l border-r border-border/50'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-background/30'
+                }`}
+                onClick={() => setActiveTab('upload')}
               >
-                <Upload size={18} />
-                <span>Upload Document</span>
+                <Upload size={16} />
+                <span>Upload</span>
               </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                accept=".pdf,.txt"
-                className="hidden"
-              />
+              <button
+                className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                  activeTab === 'link'
+                    ? 'bg-surface text-text-primary border-t border-l border-r border-border/50'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-background/30'
+                }`}
+                onClick={() => setActiveTab('link')}
+              >
+                <LinkIcon size={16} />
+                <span>Link</span>
+              </button>
+              <button
+                className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                  activeTab === 'text'
+                    ? 'bg-surface text-text-primary border-t border-l border-r border-border/50'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-background/30'
+                }`}
+                onClick={() => setActiveTab('text')}
+              >
+                <FileText size={16} />
+                <span>Text</span>
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="mb-4">
+              {activeTab === 'upload' && (
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-text-secondary">
+                    {documents.length} / 50 documents
+                  </p>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={documents.length >= 50 || uploading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg gradient-accent text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Upload size={18} />
+                    <span>Upload Document</span>
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    accept=".pdf,.txt"
+                    className="hidden"
+                  />
+                </div>
+              )}
+
+              {activeTab === 'link' && (
+                <div className="space-y-4">
+                  <p className="text-sm text-text-secondary">
+                    Add articles, Google Docs, websites, or any public URL
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://example.com/article"
+                      value={linkUrl}
+                      onChange={(e) => setLinkUrl(e.target.value)}
+                      className="flex-1 px-4 py-2.5 bg-background/50 border border-border/50 rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      onClick={handleLinkSubmit}
+                      disabled={!linkUrl.trim() || isSubmitting || documents.length >= 50}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+                    >
+                      {isSubmitting ? 'Adding...' : 'Add Link'}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {['Articles', 'Google Docs', 'Notion', 'GitHub', 'Medium', 'Any website'].map((source) => (
+                      <span
+                        key={source}
+                        className="px-2.5 py-1 bg-background/50 border border-border/30 rounded-full text-xs text-text-secondary"
+                      >
+                        {source}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'text' && (
+                <div className="space-y-4">
+                  <p className="text-sm text-text-secondary">
+                    Paste email chains, notes, meeting minutes, or any text
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="Title (optional)"
+                    value={textTitle}
+                    onChange={(e) => setTextTitle(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-background/50 border border-border/50 rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 font-medium"
+                    disabled={isSubmitting}
+                  />
+                  <textarea
+                    placeholder="Paste your text here..."
+                    value={textContent}
+                    onChange={(e) => setTextContent(e.target.value)}
+                    className="w-full px-4 py-3 bg-background/50 border border-border/50 rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 font-mono text-sm resize-y min-h-[200px]"
+                    rows={10}
+                    disabled={isSubmitting}
+                  />
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-text-secondary">
+                      {textContent.length} characters
+                    </div>
+                    <button
+                      onClick={handleTextSubmit}
+                      disabled={!textContent.trim() || isSubmitting || documents.length >= 50}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+                    >
+                      {isSubmitting ? 'Saving...' : 'Save Text'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -274,13 +433,20 @@ export default function Documents() {
                 >
                   <div className="flex items-start gap-3">
                     <div className="p-3 rounded-lg bg-background/50 flex-shrink-0">
-                      <FileText size={20} className="text-text-secondary" />
+                      {doc.doc_type === 'link' ? (
+                        <LinkIcon size={20} className="text-text-secondary" />
+                      ) : (
+                        <FileText size={20} className="text-text-secondary" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-text-primary truncate mb-1">
                         {doc.filename}
                       </p>
                       <p className="text-xs text-text-secondary">
+                        {doc.source_url && (
+                          <span className="block truncate mb-1">{doc.source_url}</span>
+                        )}
                         {formatFileSize(doc.size_bytes || 0)} •{' '}
                         {formatDistanceToNow(new Date(doc.upload_date * 1000), {
                           addSuffix: true,

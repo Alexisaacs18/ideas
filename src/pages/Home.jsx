@@ -498,6 +498,8 @@ export default function Home() {
         onDelete={handleDeleteDocument}
         onUpload={handleFileUpload}
         uploadProgress={uploadProgress}
+        onDocumentAdded={loadDocuments}
+        userId={userId}
       />
 
       {/* Modals */}

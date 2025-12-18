@@ -13,6 +13,8 @@ CREATE TABLE documents (
   file_path TEXT NOT NULL,
   upload_date INTEGER DEFAULT (unixepoch()),
   size_bytes INTEGER,
+  doc_type TEXT DEFAULT 'file',
+  source_url TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
