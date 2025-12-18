@@ -1,61 +1,30 @@
 import { useState, useEffect } from 'react';
 import { 
-  Menu, 
+  Menu,
   MessageSquare, 
   FileText, 
   Settings, 
-  User
+  User,
+  Plus,
+  ChevronDown
 } from 'lucide-react';
 
-// SidebarItem component with tooltip
-function SidebarItem({ 
-  icon: Icon, 
-  label, 
-  onClick, 
-  active = false,
-  isOpen,
-  badge
-}) {
-  const [showTooltip, setShowTooltip] = useState(false);
+// Format time helper
+function formatTime(timestamp) {
+  if (!timestamp) return 'now';
+  
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
 
-  return (
-    <div className="relative">
-      <button
-        onClick={onClick}
-        onMouseEnter={() => !isOpen && setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-        className={`
-          w-full h-12 flex items-center transition-all duration-200
-          ${isOpen ? 'justify-start px-4 gap-3' : 'justify-center'}
-          ${active 
-            ? 'bg-slate-800 text-slate-100' 
-            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-          }
-          rounded-lg
-        `}
-      >
-        <Icon className="w-5 h-5 flex-shrink-0" />
-        {isOpen && (
-          <span className="text-sm font-medium flex-1 text-left">{label}</span>
-        )}
-        {badge && isOpen && (
-          <span className="bg-accent text-white text-xs px-2 py-0.5 rounded-full">
-            {badge}
-          </span>
-        )}
-      </button>
-      
-      {/* Tooltip when closed */}
-      {!isOpen && showTooltip && (
-        <div className="absolute left-full ml-2 px-3 py-2 bg-slate-800 text-slate-100 text-sm rounded-lg shadow-lg z-50 whitespace-nowrap pointer-events-none">
-          {label}
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full">
-            <div className="border-4 border-transparent border-r-slate-800"></div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  if (diffMins < 1) return 'now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
 }
 
 export default function MainSidebar({ 
@@ -65,10 +34,14 @@ export default function MainSidebar({
   onSettingsClick,
   onProfileClick,
   chatHistory = [],
+  currentChatId,
+  onSelectChat,
+  onNewChat,
   activeSection = 'chats',
   onSectionChange
 }) {
   const [isMobile, setIsMobile] = useState(false);
+  const [chatsOpen, setChatsOpen] = useState(true);
 
   // Detect mobile
   useEffect(() => {
@@ -98,19 +71,34 @@ export default function MainSidebar({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isMobile, onToggle]);
 
-  // Sidebar width
-  const sidebarWidth = isOpen ? 'w-60' : 'w-16';
+  // Sidebar width - 48px collapsed, 240px expanded
+  const sidebarWidth = isOpen ? 'w-60' : 'w-12';
   const sidebarClasses = `
     h-screen
     bg-slate-900 border-r border-slate-700
     flex flex-col
-    transition-all duration-300 ease-in-out
+    transition-all duration-200 ease-in-out
     ${sidebarWidth}
     ${isMobile && isOpen ? 'shadow-2xl fixed left-0 top-0 z-40' : ''}
   `;
 
-  // Main content margin
-  const mainContentMargin = isOpen ? 'ml-60' : 'ml-16';
+  const handleNewChat = () => {
+    if (onNewChat) {
+      onNewChat();
+    }
+    if (isMobile && isOpen) {
+      onToggle();
+    }
+  };
+
+  const handleSelectChat = (chatId) => {
+    if (onSelectChat) {
+      onSelectChat(chatId);
+    }
+    if (isMobile && isOpen) {
+      onToggle();
+    }
+  };
 
   return (
     <>
@@ -124,73 +112,188 @@ export default function MainSidebar({
 
       {/* Sidebar */}
       <aside className={sidebarClasses}>
-        {/* Logo at top of sidebar */}
-        <div className="flex justify-center py-3 px-3 border-b border-slate-700">
-          <div className="w-6 h-6 rounded-lg gradient-accent flex items-center justify-center">
-            <span className="text-white font-bold text-xs">SB</span>
+        {/* Top section */}
+        <div className="py-3">
+          {/* Logo */}
+          <div className="flex justify-center mb-3 px-3">
+            <div className="w-6 h-6 rounded-lg gradient-accent flex items-center justify-center">
+              <span className="text-white font-bold text-xs">SB</span>
+            </div>
+          </div>
+
+          {/* Menu toggle button */}
+          <div className="px-2 mb-1">
+            <button
+              onClick={onToggle}
+              title="Menu"
+              className={`
+                w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
+                ${isOpen ? 'justify-start' : 'justify-center'}
+                text-slate-400 hover:bg-slate-800 hover:text-slate-100
+              `}
+            >
+              <Menu size={18} className="flex-shrink-0" />
+              {isOpen && <span className="text-sm font-medium">Menu</span>}
+            </button>
+          </div>
+
+          {/* Documents button - FIRST */}
+          <div className="px-2 mb-1">
+            <button
+              onClick={() => {
+                if (onSectionChange) onSectionChange('documents');
+                onDocumentsClick();
+                if (isMobile && isOpen) onToggle();
+              }}
+              title="Documents"
+              className={`
+                w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
+                ${isOpen ? 'justify-start' : 'justify-center'}
+                ${activeSection === 'documents'
+                  ? 'bg-slate-800 text-slate-100'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                }
+              `}
+            >
+              <FileText size={18} className="flex-shrink-0" />
+              {isOpen && <span className="text-sm font-medium">Documents</span>}
+            </button>
+          </div>
+
+          {/* Chats section - SECOND */}
+          <div className="px-2 mb-2">
+            {/* Chats header */}
+            <div className="mb-1">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    setChatsOpen(!chatsOpen);
+                    if (onSectionChange) onSectionChange('chats');
+                  }}
+                  title="Chats"
+                  className={`
+                    flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
+                    ${isOpen ? 'justify-between' : 'justify-center'}
+                    ${activeSection === 'chats'
+                      ? 'bg-slate-800 text-slate-100'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                    }
+                  `}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <MessageSquare size={18} className="flex-shrink-0" />
+                    {isOpen && <span className="text-sm font-medium">Chats</span>}
+                  </div>
+                  {isOpen && (
+                    <ChevronDown 
+                      size={14} 
+                      className={`transition-transform duration-200 flex-shrink-0 ${chatsOpen ? 'rotate-180' : ''}`}
+                    />
+                  )}
+                </button>
+
+                {/* New chat button */}
+                {isOpen && (
+                  <button
+                    onClick={handleNewChat}
+                    title="New chat"
+                    className="w-7 h-7 rounded-md bg-transparent border border-slate-600 text-slate-400 hover:bg-slate-800 hover:border-slate-500 hover:text-slate-100 flex items-center justify-center transition-all duration-150"
+                  >
+                    <Plus size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Chat list - shown when expanded */}
+            {isOpen && chatsOpen && (
+              <div className="max-h-[300px] overflow-y-auto">
+                {chatHistory.length === 0 ? (
+                  <div className="text-center py-8 px-4">
+                    <p className="text-xs text-slate-500">No chats yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {chatHistory.map((chat) => (
+                      <button
+                        key={chat.id}
+                        onClick={() => handleSelectChat(chat.id)}
+                        className={`
+                          w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 text-left
+                          ${currentChatId === chat.id
+                            ? 'bg-indigo-500/10 text-slate-100 border border-indigo-500/20'
+                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                          }
+                        `}
+                      >
+                        <MessageSquare size={14} className="flex-shrink-0" />
+                        <span className="flex-1 text-sm truncate">
+                          {chat.title || 'New Chat'}
+                        </span>
+                        {chat.timestamp && (
+                          <span className="text-xs text-slate-500 flex-shrink-0">
+                            {formatTime(chat.timestamp)}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Top section */}
-        <div className="flex flex-col gap-1 p-2 flex-1 overflow-y-auto">
-          <SidebarItem
-            icon={Menu}
-            label="Menu"
-            onClick={onToggle}
-            active={false}
-            isOpen={isOpen}
-          />
-          
-          <SidebarItem
-            icon={MessageSquare}
-            label="Chats"
-            onClick={() => {
-              if (onSectionChange) onSectionChange('chats');
-              if (isMobile && isOpen) onToggle();
-            }}
-            active={activeSection === 'chats'}
-            isOpen={isOpen}
-            badge={chatHistory.length > 0 ? chatHistory.length : null}
-          />
-
-          <SidebarItem
-            icon={FileText}
-            label="Documents"
-            onClick={() => {
-              if (onSectionChange) onSectionChange('documents');
-              onDocumentsClick();
-              if (isMobile) onToggle();
-            }}
-            active={activeSection === 'documents'}
-            isOpen={isOpen}
-          />
-        </div>
+        {/* Spacer to push settings/profile to bottom */}
+        <div className="flex-1" />
 
         {/* Bottom section */}
-        <div className="flex flex-col gap-1 p-2 border-t border-slate-700">
-          <SidebarItem
-            icon={Settings}
-            label="Settings"
-            onClick={() => {
-              if (onSectionChange) onSectionChange('settings');
-              onSettingsClick();
-              if (isMobile) onToggle();
-            }}
-            active={activeSection === 'settings'}
-            isOpen={isOpen}
-          />
+        <div className="pb-3">
+          {/* Divider */}
+          <div className="h-px bg-slate-700 mx-3 my-2" />
 
-          <SidebarItem
-            icon={User}
-            label="Profile"
-            onClick={() => {
-              if (onSectionChange) onSectionChange('profile');
-              onProfileClick();
-              if (isMobile) onToggle();
-            }}
-            active={activeSection === 'profile'}
-            isOpen={isOpen}
-          />
+          {/* Settings and Profile */}
+          <div className="px-2 space-y-1">
+            <button
+              onClick={() => {
+                if (onSectionChange) onSectionChange('settings');
+                onSettingsClick();
+                if (isMobile && isOpen) onToggle();
+              }}
+              title="Settings"
+              className={`
+                w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
+                ${isOpen ? 'justify-start' : 'justify-center'}
+                ${activeSection === 'settings'
+                  ? 'bg-slate-800 text-slate-100'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                }
+              `}
+            >
+              <Settings size={18} className="flex-shrink-0" />
+              {isOpen && <span className="text-sm font-medium">Settings</span>}
+            </button>
+
+            <button
+              onClick={() => {
+                if (onSectionChange) onSectionChange('profile');
+                onProfileClick();
+                if (isMobile && isOpen) onToggle();
+              }}
+              title="Profile"
+              className={`
+                w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
+                ${isOpen ? 'justify-start' : 'justify-center'}
+                ${activeSection === 'profile'
+                  ? 'bg-slate-800 text-slate-100'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                }
+              `}
+            >
+              <User size={18} className="flex-shrink-0" />
+              {isOpen && <span className="text-sm font-medium">Profile</span>}
+            </button>
+          </div>
         </div>
       </aside>
     </>

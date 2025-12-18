@@ -24,7 +24,7 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mainSidebarOpen, setMainSidebarOpen] = useState(() => {
-    // Default to closed (icon-only)
+    // Default to collapsed (48px, icon-only)
     const stored = localStorage.getItem('sidebarOpen');
     return stored ? JSON.parse(stored) : false;
   });
@@ -271,7 +271,7 @@ function App() {
     setCurrentChatId(newChatId);
     setMessages([]);
     localStorage.setItem('currentChatId', newChatId);
-    setMainSidebarOpen(false);
+    // Keep sidebar open when creating new chat
   };
 
   const handleSelectChat = (chatId) => {
@@ -291,7 +291,10 @@ function App() {
       setMessages([]);
     }
     
-    setMainSidebarOpen(false);
+    // Only close sidebar on mobile
+    if (window.innerWidth < 768) {
+      setMainSidebarOpen(false);
+    }
   };
 
   const handleDeleteChat = (chatId) => {
@@ -371,6 +374,9 @@ function App() {
           handleProfileClick();
         }}
         chatHistory={chatHistory}
+        currentChatId={currentChatId}
+        onSelectChat={handleSelectChat}
+        onNewChat={handleNewChat}
         activeSection={activeSection}
         onSectionChange={setActiveSection}
       />
@@ -399,7 +405,7 @@ function App() {
             uploadProgress={uploadProgress}
             uploading={uploading}
           />
-        </div>
+      </div>
       </div>
 
       {/* Documents Sidebar */}
