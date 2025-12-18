@@ -95,11 +95,15 @@ export default function Admin() {
     try {
       // Google OAuth configuration
       // Use the current origin + /admin as redirect URI
-      const redirectUri = `${window.location.origin}/admin`;
+      // Ensure no trailing slash on origin
+      const origin = window.location.origin.replace(/\/$/, '');
+      const redirectUri = `${origin}/admin`;
       const scope = 'openid email profile';
       
-      console.log('OAuth redirect URI:', redirectUri);
-      console.log('Make sure this URI is added to Google OAuth authorized redirect URIs');
+      // Log to console for debugging
+      const debugMsg = `Admin OAuth Redirect URI: ${redirectUri}\n\nAdd this EXACT URI to Google OAuth authorized redirect URIs`;
+      console.log(debugMsg);
+      console.log('Current origin:', window.location.origin);
       
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
         client_id: clientId,
@@ -230,23 +234,37 @@ export default function Admin() {
           </div>
           
           {hasGoogleOAuth ? (
-            <button
-              onClick={handleGoogleAuth}
-              disabled={isAuthLoading}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white hover:bg-gray-50 text-gray-900 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 shadow-sm"
-            >
-              {isAuthLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Authenticating...</span>
-                </>
-              ) : (
-                <>
-                  <Chrome className="w-5 h-5" />
-                  <span>Continue with Google</span>
-                </>
-              )}
-            </button>
+            <div>
+              <button
+                onClick={handleGoogleAuth}
+                disabled={isAuthLoading}
+                className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white hover:bg-gray-50 text-gray-900 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 shadow-sm"
+              >
+                {isAuthLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Authenticating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Chrome className="w-5 h-5" />
+                    <span>Continue with Google</span>
+                  </>
+                )}
+              </button>
+              
+              {/* Debug info - shows exact redirect URI */}
+              <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs">
+                <p className="text-amber-400 font-medium mb-2">⚠️ Debug: Redirect URI</p>
+                <p className="text-text-primary mb-1">Copy this EXACT URI to Google OAuth:</p>
+                <code className="block p-2 bg-background rounded text-amber-300 break-all text-[11px] font-mono">
+                  {window.location.origin.replace(/\/$/, '')}/admin
+                </code>
+                <p className="text-text-secondary text-[10px] mt-2">
+                  Go to Google Cloud Console → Credentials → Your OAuth Client → Add this to "Authorized redirect URIs"
+                </p>
+              </div>
+            </div>
           ) : (
             <div className="text-center p-4 bg-background/50 rounded-lg border border-border/30">
               <p className="text-sm text-text-secondary mb-2">
