@@ -21,7 +21,7 @@ invocation_logs = true
 enabled = false
 persist = true
 head_sampling_rate = 1
-
+ 
 [[d1_databases]]
 binding = "DB"
 database_name = "second_brain_db"

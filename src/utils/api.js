@@ -1,6 +1,36 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev';
 
 export const api = {
+  async signup(email, password, name = null) {
+    const body = { email, password };
+    if (name) {
+      body.name = name;
+    }
+    const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Signup failed' }));
+      throw new Error(error.error || 'Signup failed');
+    }
+    return response.json();
+  },
+
+  async login(email, password) {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Login failed' }));
+      throw new Error(error.error || 'Login failed');
+    }
+    return response.json();
+  },
+
   async register(email, userId = null) {
     const body = { email };
     if (userId) {
@@ -76,11 +106,15 @@ export const api = {
     return response.json();
   },
 
-  async oauthCallback(code, redirectUri = window.location.origin) {
+  async oauthCallback(code, redirectUri = window.location.origin, anonymousUserId = null) {
     const response = await fetch(`${API_BASE_URL}/api/auth/oauth/callback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, redirect_uri: redirectUri }),
+      body: JSON.stringify({ 
+        code, 
+        redirect_uri: redirectUri,
+        anonymous_user_id: anonymousUserId // Send anonymous userId to transfer data on first sign-in
+      }),
     });
     if (!response.ok) {
       const error = await response.json();

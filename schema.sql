@@ -2,6 +2,8 @@
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
+  password_hash TEXT,
+  name TEXT,
   created_at INTEGER DEFAULT (unixepoch())
 );
 

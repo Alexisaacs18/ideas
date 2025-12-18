@@ -97,8 +97,10 @@ export default function Home() {
           
           let userData;
           let usedBackend = false;
+          // Get current anonymous userId to transfer data on first sign-in
+          const anonymousUserId = localStorage.getItem('userId');
           try {
-            userData = await api.oauthCallback(code, redirectUri);
+            userData = await api.oauthCallback(code, redirectUri, anonymousUserId);
             usedBackend = true;
           } catch (backendError) {
             console.log('Backend OAuth not available, using frontend exchange');
@@ -154,31 +156,28 @@ export default function Home() {
           }
 
           if (userData) {
-            // Use the existing userId to keep data linked, or use the OAuth user_id if it's different
-            // The backend should have linked the accounts, so use the returned user_id
-            const finalUserId = userData.user_id || userId;
+            // Always use the userId returned from OAuth (authenticated user's ID)
+            const authenticatedUserId = userData.user_id;
             
-            // Update userId if OAuth returned a different one (account was linked)
-            if (userData.user_id && userData.user_id !== userId) {
-              setUserId(userData.user_id);
-              localStorage.setItem('userId', userData.user_id);
-            }
+            // Update userId to authenticated user's ID
+            setUserId(authenticatedUserId);
+            localStorage.setItem('userId', authenticatedUserId);
             
             setUser({
-              id: finalUserId,
+              id: authenticatedUserId,
               email: userData.email,
               name: userData.name,
               avatar: userData.avatar,
             });
             localStorage.setItem('user', JSON.stringify({
-              id: finalUserId,
+              id: authenticatedUserId,
               email: userData.email,
               name: userData.name,
               avatar: userData.avatar,
             }));
             toast.success('Signed in successfully!');
             
-            // Reload documents with the correct userId
+            // Reload documents with the authenticated userId
             loadDocuments();
           }
 
@@ -327,20 +326,59 @@ export default function Home() {
   };
 
   const handleSignOut = () => {
-    // Sign out but keep userId so data persists
-    // This allows users to sign out and sign back in without losing their data
+    // Sign out and clear userId to start a fresh anonymous session
+    // This ensures accounts are separate after first sign-in
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('userId'); // Clear userId to start new anonymous session
+    localStorage.removeItem('chatHistory'); // Clear chat history
+    localStorage.removeItem('currentChatId'); // Clear current chat
+    
+    // Generate new anonymous userId
+    const newAnonymousId = crypto.randomUUID();
+    setUserId(newAnonymousId);
+    localStorage.setItem('userId', newAnonymousId);
+    
+    // Clear local state
+    setMessages([]);
+    setDocuments([]);
+    setChatHistory([]);
+    setCurrentChatId(null);
+    
     setProfileOpen(false);
     toast.success('Signed out successfully');
-    // Note: userId is NOT removed, so documents/chats remain accessible
   };
 
-  const handleAuthSuccess = (userData) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
+  const handleAuthSuccess = async (userData) => {
+    // For email/password auth, use the userId from userData or generate new one
+    const authenticatedUserId = userData.id || userData.user_id || crypto.randomUUID();
+    
+    // Get current anonymous userId to potentially transfer data
+    const anonymousUserId = localStorage.getItem('userId');
+    
+    // If this is first sign-in and we have anonymous data, we could transfer it here
+    // For now, just switch to authenticated account
+    setUserId(authenticatedUserId);
+    localStorage.setItem('userId', authenticatedUserId);
+    
+    setUser({
+      id: authenticatedUserId,
+      email: userData.email,
+      name: userData.name,
+      avatar: userData.avatar,
+    });
+    localStorage.setItem('user', JSON.stringify({
+      id: authenticatedUserId,
+      email: userData.email,
+      name: userData.name,
+      avatar: userData.avatar,
+    }));
+    
     setAuthOpen(false);
     toast.success('Signed in successfully!');
+    
+    // Reload documents with authenticated userId
+    await loadDocuments();
   };
 
   const handleProfileClick = () => {
@@ -478,22 +516,39 @@ export default function Home() {
       <Toaster
         position="top-center"
         toastOptions={{
-          duration: 3000,
+          duration: 4000,
           style: {
-            background: '#1E293B',
+            background: '#0F172A',
             color: '#F1F5F9',
-            border: '1px solid #334155',
+            border: '1px solid rgba(99, 102, 241, 0.3)',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            fontSize: '14px',
+            fontWeight: '500',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+            minWidth: '320px',
+            maxWidth: '420px',
           },
           success: {
             iconTheme: {
-              primary: '#3B82F6',
+              primary: '#10B981',
               secondary: '#F1F5F9',
+            },
+            style: {
+              background: '#0F172A',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(16, 185, 129, 0.1)',
             },
           },
           error: {
             iconTheme: {
               primary: '#EF4444',
               secondary: '#F1F5F9',
+            },
+            style: {
+              background: '#0F172A',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(239, 68, 68, 0.1)',
             },
           },
         }}

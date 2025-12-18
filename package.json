@@ -5,6 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
+		"dev:worker": "wrangler dev",
+		"dev:full": "npm run build:pages && wrangler dev",
 		"build": "vite build",
 		"build:worker": "vite build --config vite.config.js",
 		"build:pages": "vite build --config vite.config.pages.js",

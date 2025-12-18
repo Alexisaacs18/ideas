@@ -251,11 +251,40 @@ export default function Documents() {
       <Toaster
         position="top-center"
         toastOptions={{
-          duration: 3000,
+          duration: 4000,
           style: {
-            background: '#1E293B',
+            background: '#0F172A',
             color: '#F1F5F9',
-            border: '1px solid #334155',
+            border: '1px solid rgba(99, 102, 241, 0.3)',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            fontSize: '14px',
+            fontWeight: '500',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+            minWidth: '320px',
+            maxWidth: '420px',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10B981',
+              secondary: '#F1F5F9',
+            },
+            style: {
+              background: '#0F172A',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(16, 185, 129, 0.1)',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#F1F5F9',
+            },
+            style: {
+              background: '#0F172A',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(239, 68, 68, 0.1)',
+            },
           },
         }}
       />

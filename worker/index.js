@@ -18,6 +18,70 @@ function generateId() {
   return crypto.randomUUID();
 }
 
+// Utility: Hash password using Web Crypto API (PBKDF2)
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    data,
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  
+  const hash = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    key,
+    256
+  );
+  
+  // Combine salt and hash for storage
+  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  return `${saltHex}:${hashHex}`;
+}
+
+// Utility: Verify password
+async function verifyPassword(password, storedHash) {
+  const [saltHex, hashHex] = storedHash.split(':');
+  if (!saltHex || !hashHex) return false;
+  
+  const salt = new Uint8Array(saltHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    data,
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  
+  const hash = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    key,
+    256
+  );
+  
+  const computedHashHex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return computedHashHex === hashHex;
+}
+
 // Utility: Add CORS headers to response
 function addCorsHeaders(response) {
   const newHeaders = new Headers(response.headers);
@@ -501,7 +565,160 @@ async function generateAnswer(question, context, env) {
   }
 }
 
-// API Endpoint: Register user
+// API Endpoint: Sign up user (with password)
+async function handleSignup(request, env) {
+  try {
+    if (!env.DB) {
+      return new Response(
+        JSON.stringify({ error: 'Database not configured' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const body = await parseJSON(request);
+    if (!body || !body.email || !body.password) {
+      return new Response(
+        JSON.stringify({ error: 'Email and password are required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const email = body.email.trim().toLowerCase();
+    
+    // Strong email validation regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid email format. Please enter a valid email address.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Additional validation: email must have a domain with at least one dot
+    const parts = email.split('@');
+    if (parts.length !== 2 || !parts[1].includes('.')) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid email format. Please enter a valid email address.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    if (body.password.length < 6) {
+      return new Response(
+        JSON.stringify({ error: 'Password must be at least 6 characters' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Check if user already exists
+    const existing = await env.DB.prepare(
+      'SELECT id, email FROM users WHERE email = ?'
+    ).bind(email).first();
+    
+    if (existing) {
+      return new Response(
+        JSON.stringify({ error: 'User with this email already exists' }),
+        { status: 409, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Hash password
+    const passwordHash = await hashPassword(body.password);
+    const userId = generateId();
+    const name = body.name || email.split('@')[0];
+    
+    // Create user
+    await env.DB.prepare(
+      'INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)'
+    ).bind(userId, email, passwordHash, name).run();
+    
+    return new Response(
+      JSON.stringify({ 
+        user_id: userId,
+        email: email,
+        name: name
+      }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Signup error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Signup failed' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// API Endpoint: Login user
+async function handleLogin(request, env) {
+  try {
+    if (!env.DB) {
+      return new Response(
+        JSON.stringify({ error: 'Database not configured' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const body = await parseJSON(request);
+    if (!body || !body.email || !body.password) {
+      return new Response(
+        JSON.stringify({ error: 'Email and password are required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const email = body.email.trim().toLowerCase();
+    
+    // Validate email format for login too
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid email format. Please enter a valid email address.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Get user from database
+    const user = await env.DB.prepare(
+      'SELECT id, email, password_hash, name FROM users WHERE email = ?'
+    ).bind(email).first();
+    
+    // IMPORTANT: Login should NEVER create accounts - only validate existing ones
+    if (!user || !user.password_hash) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid email or password' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Verify password
+    const isValid = await verifyPassword(body.password, user.password_hash);
+    
+    if (!isValid) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid email or password' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    return new Response(
+      JSON.stringify({ 
+        user_id: user.id,
+        email: user.email,
+        name: user.name || user.email.split('@')[0]
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Login error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Login failed' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// API Endpoint: Register user (anonymous/legacy)
 async function handleRegister(request, env) {
   try {
     // Check if DB binding exists
@@ -1575,7 +1792,11 @@ export default {
     try {
       let response;
       
-      if (path === '/api/auth/register' && request.method === 'POST') {
+      if (path === '/api/auth/signup' && request.method === 'POST') {
+        response = await handleSignup(request, env);
+      } else if (path === '/api/auth/login' && request.method === 'POST') {
+        response = await handleLogin(request, env);
+      } else if (path === '/api/auth/register' && request.method === 'POST') {
         response = await handleRegister(request, env);
       } else if (path === '/api/auth/oauth/callback' && request.method === 'POST') {
         response = await handleOAuthCallback(request, env);
@@ -1621,7 +1842,9 @@ export default {
             service: 'Document Q&A API',
             version: '1.0.0',
             endpoints: {
-              'POST /api/auth/register': 'Register a new user',
+              'POST /api/auth/signup': 'Sign up with email and password',
+              'POST /api/auth/login': 'Login with email and password',
+              'POST /api/auth/register': 'Register a new user (anonymous/legacy)',
               'POST /api/upload': 'Upload a document (PDF/TXT)',
               'POST /api/documents/link': 'Add a link (URL)',
               'POST /api/documents/text': 'Add a text snippet',
