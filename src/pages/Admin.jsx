@@ -94,8 +94,13 @@ export default function Admin() {
 
     try {
       // Google OAuth configuration
-      const redirectUri = window.location.origin + '/admin';
+      // Use the current origin + /admin as redirect URI
+      const redirectUri = `${window.location.origin}/admin`;
       const scope = 'openid email profile';
+      
+      console.log('OAuth redirect URI:', redirectUri);
+      console.log('Make sure this URI is added to Google OAuth authorized redirect URIs');
+      
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,

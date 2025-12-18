@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Mail, Lock, User as UserIcon, Chrome, Loader2 } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'react-hot-toast';
@@ -10,6 +10,34 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [oauthClientId, setOauthClientId] = useState(null);
+
+  // Load OAuth Client ID on mount
+  useEffect(() => {
+    if (isOpen) {
+      loadOAuthClientId();
+    }
+  }, [isOpen]);
+
+  const loadOAuthClientId = async () => {
+    // Try to get Client ID from environment variable first (for local dev)
+    let clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    
+    // If not set, try to fetch from backend API (for production)
+    if (!clientId || clientId === 'your-google-oauth-client-id-here') {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev'}/api/config/oauth-client-id`);
+        if (response.ok) {
+          const data = await response.json();
+          clientId = data.clientId;
+        }
+      } catch (err) {
+        console.error('Failed to load OAuth Client ID from backend:', err);
+      }
+    }
+    
+    setOauthClientId(clientId);
+  };
 
   // Reset form when switching between sign-in and sign-up
   const handleModeSwitch = (newMode) => {
@@ -21,8 +49,8 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
   };
 
   // Check if Google OAuth is configured
-  const googleOAuthEnabled = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID && 
-                              import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID !== 'your-google-oauth-client-id-here';
+  const googleOAuthEnabled = (oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID) && 
+                              (oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID) !== 'your-google-oauth-client-id-here';
 
   if (!isOpen) return null;
 
@@ -86,13 +114,11 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
   };
 
   const handleGoogleAuth = async () => {
-    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
-    const clientSecret = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_SECRET; // Optional for frontend-only flow
+    // Use the loaded Client ID (from env var or API)
+    const clientId = oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
     
     if (!clientId || clientId === 'your-google-oauth-client-id-here') {
-      console.warn('Google OAuth Client ID not configured. OAuth sign-in is disabled.');
-      // Don't show alert - just silently disable OAuth button
-      // Users can still use email/password or continue as anonymous
+      toast.error('Google OAuth not configured');
       return;
     }
 
