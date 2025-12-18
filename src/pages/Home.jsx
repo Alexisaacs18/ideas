@@ -137,8 +137,9 @@ export default function Home() {
               }
 
               const googleUser = await userInfoResponse.json();
+              // Use existing userId to keep data linked, backend will handle account linking
               userData = {
-                user_id: crypto.randomUUID(),
+                user_id: userId, // Use existing userId to preserve data
                 email: googleUser.email,
                 name: googleUser.name,
                 avatar: googleUser.picture,
@@ -153,19 +154,32 @@ export default function Home() {
           }
 
           if (userData) {
+            // Use the existing userId to keep data linked, or use the OAuth user_id if it's different
+            // The backend should have linked the accounts, so use the returned user_id
+            const finalUserId = userData.user_id || userId;
+            
+            // Update userId if OAuth returned a different one (account was linked)
+            if (userData.user_id && userData.user_id !== userId) {
+              setUserId(userData.user_id);
+              localStorage.setItem('userId', userData.user_id);
+            }
+            
             setUser({
-              id: userData.user_id,
+              id: finalUserId,
               email: userData.email,
               name: userData.name,
               avatar: userData.avatar,
             });
             localStorage.setItem('user', JSON.stringify({
-              id: userData.user_id,
+              id: finalUserId,
               email: userData.email,
               name: userData.name,
               avatar: userData.avatar,
             }));
             toast.success('Signed in successfully!');
+            
+            // Reload documents with the correct userId
+            loadDocuments();
           }
 
           // Clean URL
@@ -313,10 +327,13 @@ export default function Home() {
   };
 
   const handleSignOut = () => {
+    // Sign out but keep userId so data persists
+    // This allows users to sign out and sign back in without losing their data
     setUser(null);
     localStorage.removeItem('user');
     setProfileOpen(false);
     toast.success('Signed out successfully');
+    // Note: userId is NOT removed, so documents/chats remain accessible
   };
 
   const handleAuthSuccess = (userData) => {
