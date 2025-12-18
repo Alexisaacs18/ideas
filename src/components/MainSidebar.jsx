@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Menu,
   MessageSquare, 
@@ -30,18 +31,20 @@ function formatTime(timestamp) {
 export default function MainSidebar({ 
   isOpen,
   onToggle,
-  onDocumentsClick,
   onSettingsClick,
   onProfileClick,
   chatHistory = [],
   currentChatId,
   onSelectChat,
   onNewChat,
-  activeSection = 'chats',
-  onSectionChange
 }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(false);
   const [chatsOpen, setChatsOpen] = useState(true);
+  
+  // Determine active section based on route
+  const activeSection = location.pathname === '/documents' ? 'documents' : 'chats';
 
   // Detect mobile
   useEffect(() => {
@@ -83,6 +86,11 @@ export default function MainSidebar({
   `;
 
   const handleNewChat = () => {
+    if (location.pathname === '/documents') {
+      // Navigate to home first
+      navigate('/');
+      return;
+    }
     if (onNewChat) {
       onNewChat();
     }
@@ -92,6 +100,13 @@ export default function MainSidebar({
   };
 
   const handleSelectChat = (chatId) => {
+    if (location.pathname === '/documents') {
+      // Navigate to home first, then select chat
+      // Store chat ID to select after navigation
+      localStorage.setItem('pendingChatId', chatId);
+      navigate('/');
+      return;
+    }
     if (onSelectChat) {
       onSelectChat(chatId);
     }
@@ -139,10 +154,9 @@ export default function MainSidebar({
 
           {/* Documents button - FIRST */}
           <div className="px-2 mb-1">
-            <button
+            <Link
+              to="/documents"
               onClick={() => {
-                if (onSectionChange) onSectionChange('documents');
-                onDocumentsClick();
                 if (isMobile && isOpen) onToggle();
               }}
               title="Documents"
@@ -157,7 +171,7 @@ export default function MainSidebar({
             >
               <FileText size={18} className="flex-shrink-0" />
               {isOpen && <span className="text-sm font-medium">Documents</span>}
-            </button>
+            </Link>
           </div>
 
           {/* Chats section - SECOND */}
@@ -165,37 +179,49 @@ export default function MainSidebar({
             {/* Chats header */}
             <div className="mb-1">
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    setChatsOpen(!chatsOpen);
-                    if (onSectionChange) onSectionChange('chats');
-                  }}
-                  title="Chats"
-                  className={`
-                    flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
-                    ${isOpen ? 'justify-between' : 'justify-center'}
-                    ${activeSection === 'chats'
-                      ? 'bg-slate-800 text-slate-100'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-                    }
-                  `}
-                >
-                  <div className="flex items-center gap-2.5">
+                {location.pathname === '/documents' ? (
+                  <Link
+                    to="/"
+                    title="Chats"
+                    className={`
+                      flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
+                      ${isOpen ? 'justify-start' : 'justify-center'}
+                      text-slate-400 hover:bg-slate-800 hover:text-slate-100
+                    `}
+                  >
                     <MessageSquare size={18} className="flex-shrink-0" />
                     {isOpen && <span className="text-sm font-medium">Chats</span>}
-                  </div>
-                  {isOpen && (
-                    <ChevronDown 
-                      size={14} 
-                      className={`transition-transform duration-200 flex-shrink-0 ${chatsOpen ? 'rotate-180' : ''}`}
-                    />
-                  )}
-                </button>
-
-                {/* New chat button */}
-                {isOpen && (
+                  </Link>
+                ) : (
                   <button
-                    onClick={handleNewChat}
+                    onClick={() => setChatsOpen(!chatsOpen)}
+                    title="Chats"
+                    className={`
+                      flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
+                      ${isOpen ? 'justify-between' : 'justify-center'}
+                      ${activeSection === 'chats'
+                        ? 'bg-slate-800 text-slate-100'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                      }
+                    `}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <MessageSquare size={18} className="flex-shrink-0" />
+                      {isOpen && <span className="text-sm font-medium">Chats</span>}
+                    </div>
+                    {isOpen && (
+                      <ChevronDown 
+                        size={14} 
+                        className={`transition-transform duration-200 flex-shrink-0 ${chatsOpen ? 'rotate-180' : ''}`}
+                      />
+                    )}
+                  </button>
+                )}
+
+                {/* New chat button - only show on home page */}
+                {isOpen && location.pathname === '/' && (
+                  <button
+                    onClick={onNewChat}
                     title="New chat"
                     className="w-7 h-7 rounded-md bg-transparent border border-slate-600 text-slate-400 hover:bg-slate-800 hover:border-slate-500 hover:text-slate-100 flex items-center justify-center transition-all duration-150"
                   >
@@ -256,7 +282,6 @@ export default function MainSidebar({
           <div className="px-2 space-y-1">
             <button
               onClick={() => {
-                if (onSectionChange) onSectionChange('settings');
                 onSettingsClick();
                 if (isMobile && isOpen) onToggle();
               }}
@@ -276,7 +301,6 @@ export default function MainSidebar({
 
             <button
               onClick={() => {
-                if (onSectionChange) onSectionChange('profile');
                 onProfileClick();
                 if (isMobile && isOpen) onToggle();
               }}
