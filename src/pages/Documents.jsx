@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { FileText, Trash2, Upload, Link as LinkIcon } from 'lucide-react';
+import { FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Toaster, toast } from 'react-hot-toast';
 import MainSidebar from '../components/MainSidebar';
@@ -66,12 +66,20 @@ export default function Documents() {
     if (!file) return;
 
     // Validate file type
-    const validTypes = ['application/pdf', 'text/plain'];
-    const validExtensions = ['.pdf', '.txt'];
+    const validTypes = [
+      'application/pdf',
+      'text/plain',
+      'text/csv',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/heic'
+    ];
+    const validExtensions = ['.pdf', '.txt', '.csv', '.png', '.jpg', '.jpeg', '.heic'];
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
     
     if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-      toast.error('Please upload a PDF or TXT file');
+      toast.error('Please upload PDF, TXT, CSV, or image files (PNG, JPG, JPEG, HEIC)');
       return;
     }
 
@@ -297,25 +305,42 @@ export default function Documents() {
             {/* Tab Content */}
             <div className="mb-4">
               {activeTab === 'upload' && (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-text-secondary">
-                    {documents.length} / 50 documents
-                  </p>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={documents.length >= 50 || uploading}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg gradient-accent text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Upload size={18} />
-                    <span>Upload Document</span>
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    accept=".pdf,.txt"
-                    className="hidden"
-                  />
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm text-text-secondary">
+                      {documents.length} / 50 documents
+                    </p>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={documents.length >= 50 || uploading}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg gradient-accent text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Upload size={18} />
+                      <span>Upload Document</span>
+                    </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept=".pdf,.txt,.csv,.png,.jpg,.jpeg,.heic"
+                      className="hidden"
+                    />
+                  </div>
+                  <div className="pt-4 border-t border-border/50">
+                    <p className="text-xs text-text-secondary uppercase tracking-wider mb-2">
+                      Supported formats:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {['📄 PDF', '📝 TXT', '📊 CSV', '🖼️ Images (PNG, JPG)'].map((type) => (
+                        <span
+                          key={type}
+                          className="px-2.5 py-1 bg-background/50 border border-border/30 rounded-full text-xs text-text-secondary"
+                        >
+                          {type}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -324,6 +349,12 @@ export default function Documents() {
                   <p className="text-sm text-text-secondary">
                     Add articles, Google Docs, websites, or any public URL
                   </p>
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <p className="text-xs text-amber-400 font-medium mb-1">⚠️ Important</p>
+                    <p className="text-xs text-amber-300/80">
+                      Links must be publicly accessible. Private pages, password-protected content, or pages requiring authentication cannot be processed.
+                    </p>
+                  </div>
                   <div className="flex gap-2">
                     <input
                       type="url"
@@ -435,6 +466,10 @@ export default function Documents() {
                     <div className="p-3 rounded-lg bg-background/50 flex-shrink-0">
                       {doc.doc_type === 'link' ? (
                         <LinkIcon size={20} className="text-text-secondary" />
+                      ) : doc.filename.match(/\.csv$/i) ? (
+                        <BarChart2 size={20} className="text-text-secondary" />
+                      ) : doc.filename.match(/\.(png|jpg|jpeg|heic)$/i) ? (
+                        <Image size={20} className="text-text-secondary" />
                       ) : (
                         <FileText size={20} className="text-text-secondary" />
                       )}

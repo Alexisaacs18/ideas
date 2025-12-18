@@ -57,7 +57,7 @@ export default function InputArea({ onSend, onFileUpload, uploadProgress, upload
             type="file"
             ref={fileInputRef}
             onChange={handleFileSelect}
-            accept=".pdf,.txt"
+            accept=".pdf,.txt,.csv,.png,.jpg,.jpeg,.heic"
             className="hidden"
           />
           

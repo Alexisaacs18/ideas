@@ -329,12 +329,20 @@ export default function Home() {
     if (!file) return;
 
     // Validate file type
-    const validTypes = ['application/pdf', 'text/plain'];
-    const validExtensions = ['.pdf', '.txt'];
+    const validTypes = [
+      'application/pdf',
+      'text/plain',
+      'text/csv',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/heic'
+    ];
+    const validExtensions = ['.pdf', '.txt', '.csv', '.png', '.jpg', '.jpeg', '.heic'];
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
     
     if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-      toast.error('Please upload a PDF or TXT file');
+      toast.error('Please upload PDF, TXT, CSV, or image files (PNG, JPG, JPEG, HEIC)');
       return;
     }
 

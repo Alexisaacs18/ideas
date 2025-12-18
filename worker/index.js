@@ -5,6 +5,7 @@
 
 import { HfInference } from '@huggingface/inference';
 import { getDocument } from 'pdfjs-serverless';
+import Papa from 'papaparse';
 
 // CORS headers helper
 const corsHeaders = {
@@ -172,15 +173,148 @@ async function extractTextFromPDF(arrayBuffer) {
   }
 }
 
-// Utility: Extract text from file (supports TXT and PDF)
-async function extractTextFromFile(file, filename) {
+// Utility: Process CSV file
+async function processCSV(csvText, fileName) {
+  console.log('=== CSV PROCESSING ===');
+  console.log('CSV length:', csvText.length);
+  
+  return new Promise((resolve, reject) => {
+    Papa.parse(csvText, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: true,
+      complete: (results) => {
+        console.log('CSV parsed, rows:', results.data.length);
+        console.log('Headers:', results.meta.fields);
+        
+        const headers = results.meta.fields || [];
+        const rows = results.data;
+        
+        let text = `CSV File: ${fileName}\n\n`;
+        text += `This dataset contains ${rows.length} records with the following information:\n\n`;
+        
+        // Add column descriptions
+        headers.forEach(header => {
+          const values = rows.map(r => r[header]).filter(v => v !== null && v !== undefined);
+          const uniqueValues = [...new Set(values)].slice(0, 5);
+          
+          text += `${header}:\n`;
+          if (uniqueValues.length > 0) {
+            text += `  Examples: ${uniqueValues.join(', ')}\n`;
+          }
+          text += `  Total entries: ${values.length}\n\n`;
+        });
+        
+        // Add full data
+        text += `\n\nComplete Data:\n\n`;
+        rows.forEach((row, idx) => {
+          text += `Record ${idx + 1}: `;
+          text += headers.map(h => `${h}: ${row[h]}`).join(', ');
+          text += '\n';
+        });
+        
+        console.log('CSV converted to text, length:', text.length);
+        console.log('Preview:', text.substring(0, 500));
+        
+        resolve(text);
+      },
+      error: (error) => {
+        console.error('CSV parse error:', error);
+        reject(new Error(`CSV parsing failed: ${error.message}`));
+      }
+    });
+  });
+}
+
+// Utility: Extract text from image using OCR.space API
+async function extractTextFromImage(arrayBuffer, mimeType, env) {
+  console.log('=== IMAGE OCR START ===');
+  console.log('Image size:', arrayBuffer.byteLength);
+  console.log('MIME type:', mimeType);
+  
+  try {
+    // Check size limit (OCR.space free tier: 1MB)
+    if (arrayBuffer.byteLength > 1024 * 1024) {
+      throw new Error('Image too large (max 1MB). Please compress your image.');
+    }
+    
+    // Convert to base64 in chunks to avoid stack overflow
+    // Use smaller chunks to prevent call stack issues
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    const chunkSize = 8192; // 8KB chunks (safe size for String.fromCharCode)
+    
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+      // Convert chunk using Array.from to avoid stack overflow
+      const chunkArray = Array.from(chunk);
+      binary += String.fromCharCode.apply(null, chunkArray);
+    }
+    
+    const base64Image = btoa(binary);
+    const dataUri = `data:${mimeType};base64,${base64Image}`;
+    
+    console.log('Image converted to base64, length:', base64Image.length);
+    
+    const formData = new URLSearchParams();
+    formData.append('base64Image', dataUri);
+    formData.append('language', 'eng');
+    formData.append('isOverlayRequired', 'false');
+    
+    const apiKey = env.OCR_SPACE_API_KEY || 'K87899142388957'; // Free demo key
+    
+    console.log('Calling OCR.space API...');
+    
+    const response = await fetch('https://api.ocr.space/parse/image', {
+      method: 'POST',
+      headers: {
+        'apikey': apiKey,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData.toString()
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OCR API error response:', errorText);
+      throw new Error(`OCR API returned ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log('OCR result:', JSON.stringify(result).substring(0, 500));
+    
+    if (result.IsErroredOnProcessing) {
+      throw new Error(result.ErrorMessage?.[0] || 'OCR failed');
+    }
+    
+    const text = result.ParsedResults?.[0]?.ParsedText || '';
+    
+    console.log('Extracted text length:', text.length);
+    console.log('Preview:', text.substring(0, 200));
+    
+    if (text.trim().length < 5) {
+      throw new Error('No readable text found in image');
+    }
+    
+    return text.trim();
+    
+  } catch (error) {
+    console.error('OCR error:', error);
+    throw new Error(`Image OCR failed: ${error.message}`);
+  }
+}
+
+// Utility: Extract text from file (supports TXT, PDF, CSV, and Images)
+async function extractTextFromFile(file, filename, env) {
   const extension = filename.split('.').pop().toLowerCase();
+  const fileType = file.type;
   
   console.log('=== FILE EXTRACTION ===');
   console.log('Filename:', filename);
   console.log('Extension:', extension);
+  console.log('MIME type:', fileType);
   
-  if (extension === 'txt') {
+  if (extension === 'txt' || fileType === 'text/plain') {
     const text = await file.text();
     console.log('TXT file - Text length:', text.length);
     console.log('Text preview:', text.substring(0, 200));
@@ -191,7 +325,7 @@ async function extractTextFromFile(file, filename) {
     }
     
     return cleanText(text);
-  } else if (extension === 'pdf') {
+  } else if (extension === 'pdf' || fileType === 'application/pdf') {
     const arrayBuffer = await file.arrayBuffer();
     const extractedText = await extractTextFromPDF(arrayBuffer);
     
@@ -205,8 +339,14 @@ async function extractTextFromFile(file, filename) {
     );
     
     return extractedText;
+  } else if (extension === 'csv' || fileType === 'text/csv') {
+    const csvText = await file.text();
+    return await processCSV(csvText, filename);
+  } else if (fileType.startsWith('image/') || /\.(png|jpg|jpeg|heic)$/i.test(filename)) {
+    const arrayBuffer = await file.arrayBuffer();
+    return await extractTextFromImage(arrayBuffer, fileType, env);
   } else {
-    throw new Error(`Unsupported file type: ${extension}`);
+    throw new Error(`Unsupported file type: ${extension}. Please upload PDF, TXT, CSV, or image files (PNG, JPG, JPEG, HEIC).`);
   }
 }
 
@@ -486,7 +626,7 @@ async function handleUpload(request, env) {
     const fileSize = file.size;
     
     // Extract text from file
-    const text = await extractTextFromFile(file, filename);
+    const text = await extractTextFromFile(file, filename, env);
     
     if (!text || text.trim().length === 0) {
       return new Response(

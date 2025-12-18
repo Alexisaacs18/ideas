@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { X, FileText, Trash2, Upload, Link as LinkIcon } from 'lucide-react';
+import { X, FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { api } from '../utils/api';
@@ -159,7 +159,7 @@ export default function DocumentsSidebar({
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
-                accept=".pdf,.txt"
+                accept=".pdf,.txt,.csv,.png,.jpg,.jpeg,.heic"
                 className="hidden"
               />
               {uploadProgress !== null && (
@@ -182,9 +182,15 @@ export default function DocumentsSidebar({
           {/* Link Tab */}
           {activeTab === 'link' && (
             <div>
-              <p className="text-sm text-text-secondary mb-4">
+              <p className="text-sm text-text-secondary mb-2">
                 Add articles, Google Docs, websites, or any public URL
               </p>
+              <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <p className="text-xs text-amber-400 font-medium mb-1">⚠️ Important</p>
+                <p className="text-xs text-amber-300/80">
+                  Links must be publicly accessible. Private pages, password-protected content, or pages requiring authentication cannot be processed.
+                </p>
+              </div>
               
               <div className="mb-4">
                 <input
@@ -295,6 +301,10 @@ Examples:
                     <div className="p-2 rounded-lg bg-background/50 flex-shrink-0">
                       {doc.doc_type === 'link' ? (
                         <LinkIcon size={18} className="text-text-secondary" />
+                      ) : doc.filename && doc.filename.match(/\.csv$/i) ? (
+                        <BarChart2 size={18} className="text-text-secondary" />
+                      ) : doc.filename && doc.filename.match(/\.(png|jpg|jpeg|heic)$/i) ? (
+                        <Image size={18} className="text-text-secondary" />
                       ) : (
                         <FileText size={18} className="text-text-secondary" />
                       )}
