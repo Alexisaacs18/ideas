@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, User, Bell, Trash2, Lock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import ConfirmModal from './ConfirmModal';
 
 export default function Settings({ 
   isOpen, 
@@ -16,6 +17,9 @@ export default function Settings({
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showDeleteChatsModal, setShowDeleteChatsModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [showDeleteAccountFinalModal, setShowDeleteAccountFinalModal] = useState(false);
 
   if (!isOpen) return null;
 
@@ -57,25 +61,22 @@ export default function Settings({
   };
 
   const handleDeleteAllChats = () => {
-    if (confirm('Are you sure you want to delete ALL chats? This cannot be undone.')) {
-      if (onDeleteAllChats) {
-        onDeleteAllChats();
-        toast.success('All chats deleted');
-      } else {
-        toast.error('Delete chats function not available');
-      }
+    if (onDeleteAllChats) {
+      onDeleteAllChats();
+      toast.success('All chats deleted');
+      setShowDeleteChatsModal(false);
+    } else {
+      toast.error('Delete chats function not available');
     }
   };
 
   const handleDeleteAccount = () => {
-    if (confirm('Are you sure you want to delete your account? This will permanently delete all your data including documents, chats, and account information. This cannot be undone.')) {
-      if (confirm('This is your last warning. Are you absolutely sure?')) {
-        if (onDeleteAccount) {
-          onDeleteAccount();
-        } else {
-          toast.error('Delete account function not available');
-        }
-      }
+    if (onDeleteAccount) {
+      onDeleteAccount();
+      setShowDeleteAccountFinalModal(false);
+      setShowDeleteAccountModal(false);
+    } else {
+      toast.error('Delete account function not available');
     }
   };
 
@@ -209,7 +210,7 @@ export default function Settings({
                 </div>
               </div>
               <button 
-                onClick={handleDeleteAllChats}
+                onClick={() => setShowDeleteChatsModal(true)}
                 className="px-4 py-1.5 bg-transparent border border-red-500/30 rounded-md text-red-400 text-xs cursor-pointer transition-all hover:bg-red-500/10 hover:border-red-500/50"
               >
                 Delete
@@ -225,7 +226,7 @@ export default function Settings({
                 </div>
               </div>
               <button 
-                onClick={handleDeleteAccount}
+                onClick={() => setShowDeleteAccountModal(true)}
                 className="px-4 py-1.5 bg-transparent border border-red-500/30 rounded-md text-red-400 text-xs cursor-pointer transition-all hover:bg-red-500/10 hover:border-red-500/50"
               >
                 Delete
@@ -334,6 +335,45 @@ export default function Settings({
           </div>
         </div>
       )}
+
+      {/* Delete All Chats Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteChatsModal}
+        onClose={() => setShowDeleteChatsModal(false)}
+        onConfirm={handleDeleteAllChats}
+        title="Delete All Chats"
+        message="Are you sure you want to delete ALL chats? This cannot be undone."
+        confirmText="Delete All"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* Delete Account - First Confirmation */}
+      <ConfirmModal
+        isOpen={showDeleteAccountModal}
+        onClose={() => setShowDeleteAccountModal(false)}
+        onConfirm={() => {
+          setShowDeleteAccountModal(false);
+          setShowDeleteAccountFinalModal(true);
+        }}
+        title="Delete Account"
+        message="Are you sure you want to delete your account? This will permanently delete all your data including documents, chats, and account information. This cannot be undone."
+        confirmText="Yes, Delete"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* Delete Account - Final Confirmation */}
+      <ConfirmModal
+        isOpen={showDeleteAccountFinalModal}
+        onClose={() => setShowDeleteAccountFinalModal(false)}
+        onConfirm={handleDeleteAccount}
+        title="Final Warning"
+        message="This is your last warning. Are you absolutely sure you want to delete your account? This action is permanent and cannot be reversed."
+        confirmText="Yes, Delete Forever"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }

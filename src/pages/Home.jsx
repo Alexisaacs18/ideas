@@ -8,6 +8,7 @@ import DocumentsSidebar from '../components/DocumentsSidebar';
 import Settings from '../components/Settings';
 import Profile from '../components/Profile';
 import Auth from '../components/Auth';
+import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../utils/api';
 
 export default function Home() {
@@ -43,6 +44,8 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [deleteChatModal, setDeleteChatModal] = useState({ isOpen: false, chatId: null });
+  const [deleteDocModal, setDeleteDocModal] = useState({ isOpen: false, docId: null });
 
   // Register user on mount
   useEffect(() => {
@@ -305,20 +308,24 @@ export default function Home() {
   };
 
   const handleDeleteChat = (chatId) => {
-    if (confirm('Are you sure you want to delete this chat?')) {
-      setChatHistory(prev => {
-        const updated = prev.filter(chat => chat.id !== chatId);
-        localStorage.setItem('chatHistory', JSON.stringify(updated));
-        return updated;
-      });
-      localStorage.removeItem(`chat_${chatId}`);
-      
-      if (currentChatId === chatId) {
-        setCurrentChatId(null);
-        setMessages([]);
-        localStorage.removeItem('currentChatId');
-      }
+    setDeleteChatModal({ isOpen: true, chatId });
+  };
+
+  const confirmDeleteChat = () => {
+    const { chatId } = deleteChatModal;
+    setChatHistory(prev => {
+      const updated = prev.filter(chat => chat.id !== chatId);
+      localStorage.setItem('chatHistory', JSON.stringify(updated));
+      return updated;
+    });
+    localStorage.removeItem(`chat_${chatId}`);
+    
+    if (currentChatId === chatId) {
+      setCurrentChatId(null);
+      setMessages([]);
+      localStorage.removeItem('currentChatId');
     }
+    setDeleteChatModal({ isOpen: false, chatId: null });
   };
 
   const handleSettingsClick = () => {
@@ -455,12 +462,13 @@ export default function Home() {
   };
 
   const handleDeleteDocument = async (documentId) => {
-    if (!confirm('Are you sure you want to delete this document?')) {
-      return;
-    }
+    setDeleteDocModal({ isOpen: true, docId: documentId });
+  };
 
+  const confirmDeleteDocument = async () => {
+    const { docId } = deleteDocModal;
     try {
-      await api.deleteDocument(documentId);
+      await api.deleteDocument(docId);
       toast.success('Document deleted');
       await loadDocuments();
       
@@ -468,14 +476,16 @@ export default function Home() {
       setMessages((prev) =>
         prev.filter((msg) => {
           if (msg.sources) {
-            return !msg.sources.some((s) => s.doc_id === documentId);
+            return !msg.sources.some((s) => s.doc_id === docId);
           }
           return true;
         })
       );
+      setDeleteDocModal({ isOpen: false, docId: null });
     } catch (error) {
       toast.error(error.message || 'Delete failed');
       console.error('Delete error:', error);
+      setDeleteDocModal({ isOpen: false, docId: null });
     }
   };
 
@@ -615,6 +625,30 @@ export default function Home() {
           onAuthSuccess={handleAuthSuccess}
         />
       )}
+
+      {/* Delete Chat Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteChatModal.isOpen}
+        onClose={() => setDeleteChatModal({ isOpen: false, chatId: null })}
+        onConfirm={confirmDeleteChat}
+        title="Delete Chat"
+        message="Are you sure you want to delete this chat? This cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* Delete Document Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteDocModal.isOpen}
+        onClose={() => setDeleteDocModal({ isOpen: false, docId: null })}
+        onConfirm={confirmDeleteDocument}
+        title="Delete Document"
+        message="Are you sure you want to delete this document? This cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }

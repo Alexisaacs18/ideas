@@ -3,6 +3,7 @@ import { FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image } from 'lu
 import { formatDistanceToNow } from 'date-fns';
 import { Toaster, toast } from 'react-hot-toast';
 import MainSidebar from '../components/MainSidebar';
+import ConfirmModal from '../components/ConfirmModal';
 import Settings from '../components/Settings';
 import Profile from '../components/Profile';
 import Auth from '../components/Auth';
@@ -35,6 +36,7 @@ export default function Documents() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [deleteDocModal, setDeleteDocModal] = useState({ isOpen: false, docId: null });
 
   // Get userId from localStorage, create if doesn't exist
   const [userId] = useState(() => {
@@ -144,17 +146,20 @@ export default function Documents() {
   };
 
   const handleDeleteDocument = async (documentId) => {
-    if (!confirm('Are you sure you want to delete this document?')) {
-      return;
-    }
+    setDeleteDocModal({ isOpen: true, docId: documentId });
+  };
 
+  const confirmDeleteDocument = async () => {
+    const { docId } = deleteDocModal;
     try {
-      await api.deleteDocument(documentId);
+      await api.deleteDocument(docId);
       toast.success('Document deleted');
       await loadDocuments();
+      setDeleteDocModal({ isOpen: false, docId: null });
     } catch (error) {
       toast.error('Failed to delete document');
       console.error('Delete error:', error);
+      setDeleteDocModal({ isOpen: false, docId: null });
     }
   };
 
@@ -573,6 +578,18 @@ export default function Documents() {
           onAuthSuccess={handleAuthSuccess}
         />
       )}
+
+      {/* Delete Document Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteDocModal.isOpen}
+        onClose={() => setDeleteDocModal({ isOpen: false, docId: null })}
+        onConfirm={confirmDeleteDocument}
+        title="Delete Document"
+        message="Are you sure you want to delete this document? This cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }
