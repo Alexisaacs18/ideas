@@ -7,6 +7,10 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
 
+  // Check if Google OAuth is configured
+  const googleOAuthEnabled = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID && 
+                              import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID !== 'your-google-oauth-client-id-here';
+
   if (!isOpen) return null;
 
   const handleEmailAuth = async (e) => {
@@ -32,8 +36,9 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
     const clientSecret = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_SECRET; // Optional for frontend-only flow
     
     if (!clientId || clientId === 'your-google-oauth-client-id-here') {
-      console.error('Google OAuth Client ID not configured. Please add VITE_GOOGLE_OAUTH_CLIENT_ID to your .env file');
-      alert('Google OAuth is not configured. Please add your Google OAuth Client ID to the .env file.');
+      console.warn('Google OAuth Client ID not configured. OAuth sign-in is disabled.');
+      // Don't show alert - just silently disable OAuth button
+      // Users can still use email/password or continue as anonymous
       return;
     }
 
@@ -124,20 +129,24 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
             {isSignUp ? 'Sign Up' : 'Sign In'}
           </button>
 
-          <div className="flex items-center gap-4 text-slate-400 text-xs my-2">
-            <div className="flex-1 h-px bg-slate-700"></div>
-            <span>or</span>
-            <div className="flex-1 h-px bg-slate-700"></div>
-          </div>
+          {googleOAuthEnabled && (
+            <>
+              <div className="flex items-center gap-4 text-slate-400 text-xs my-2">
+                <div className="flex-1 h-px bg-slate-700"></div>
+                <span>or</span>
+                <div className="flex-1 h-px bg-slate-700"></div>
+              </div>
 
-          <button
-            type="button"
-            className="w-full py-3 rounded-lg bg-transparent border border-slate-700 text-slate-100 text-sm font-medium cursor-pointer transition-all hover:bg-slate-800 flex items-center justify-center gap-2"
-            onClick={handleGoogleAuth}
-          >
-            <Chrome size={18} />
-            Continue with Google
-          </button>
+              <button
+                type="button"
+                className="w-full py-3 rounded-lg bg-transparent border border-slate-700 text-slate-100 text-sm font-medium cursor-pointer transition-all hover:bg-slate-800 flex items-center justify-center gap-2"
+                onClick={handleGoogleAuth}
+              >
+                <Chrome size={18} />
+                Continue with Google
+              </button>
+            </>
+          )}
 
           <button
             type="button"
