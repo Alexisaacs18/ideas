@@ -640,15 +640,46 @@ async function handleUpload(request, env) {
     
     // Verify user exists, create if not
     let user = await env.DB.prepare(
-      'SELECT id FROM users WHERE id = ?'
+      'SELECT id, email FROM users WHERE id = ?'
     ).bind(userId).first();
     
     if (!user) {
       // Auto-create user with temporary email
+      // Use a unique email format to avoid conflicts
       const tempEmail = `${userId}@temp.local`;
-      await env.DB.prepare(
-        'INSERT INTO users (id, email) VALUES (?, ?)'
-      ).bind(userId, tempEmail).run();
+      
+      // Check if this email already exists (shouldn't happen, but be safe)
+      const existingByEmail = await env.DB.prepare(
+        'SELECT id FROM users WHERE email = ?'
+      ).bind(tempEmail).first();
+      
+      if (existingByEmail) {
+        // User already exists with this email, use that ID
+        userId = existingByEmail.id;
+        user = existingByEmail;
+      } else {
+        // Create new user with unique email
+        try {
+          await env.DB.prepare(
+            'INSERT INTO users (id, email) VALUES (?, ?)'
+          ).bind(userId, tempEmail).run();
+          user = { id: userId, email: tempEmail };
+        } catch (error) {
+          // If insert fails (e.g., duplicate ID), try to get existing user
+          if (error.message.includes('UNIQUE') || error.message.includes('constraint')) {
+            const existing = await env.DB.prepare(
+              'SELECT id, email FROM users WHERE id = ?'
+            ).bind(userId).first();
+            if (existing) {
+              user = existing;
+            } else {
+              throw error;
+            }
+          } else {
+            throw error;
+          }
+        }
+      }
     }
     
     const filename = file.name;
