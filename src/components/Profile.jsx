@@ -1,7 +1,36 @@
-import { X, LogOut, Mail, Calendar } from 'lucide-react';
+import { X, LogOut, Mail, Calendar, Chrome } from 'lucide-react';
 
 export default function Profile({ isOpen, onClose, user, onSignOut }) {
   if (!isOpen || !user) return null;
+
+  // Check if Google OAuth is configured
+  const googleOAuthEnabled = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID && 
+                              import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID !== 'your-google-oauth-client-id-here';
+  
+  // Check if user is signed in with Google (has avatar from Google)
+  const isGoogleUser = user.avatar && user.avatar.includes('googleusercontent.com');
+  
+  const handleConnectGoogle = () => {
+    if (!googleOAuthEnabled) {
+      console.warn('Google OAuth not configured');
+      return;
+    }
+    
+    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    const redirectUri = window.location.origin;
+    const scope = 'openid email profile';
+    const responseType = 'code';
+    
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${encodeURIComponent(clientId)}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=${responseType}&` +
+      `scope=${encodeURIComponent(scope)}&` +
+      `access_type=offline&` +
+      `prompt=consent`;
+    
+    window.location.href = authUrl;
+  };
 
   return (
     <div 
@@ -67,6 +96,30 @@ export default function Profile({ isOpen, onClose, user, onSignOut }) {
                 </div>
               </div>
             </div>
+
+            {/* Google OAuth Connection */}
+            {googleOAuthEnabled && (
+              <div className="flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700 rounded-lg">
+                <div className="flex items-center gap-3 flex-1">
+                  <Chrome size={16} className="text-slate-400" />
+                  <div>
+                    <div className="text-sm font-medium text-slate-100">Google Account</div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      {isGoogleUser ? 'Connected' : 'Not connected'}
+                    </div>
+                  </div>
+                </div>
+                {!isGoogleUser && (
+                  <button
+                    onClick={handleConnectGoogle}
+                    className="px-4 py-1.5 bg-slate-800 border border-slate-600 rounded-md text-slate-100 text-xs cursor-pointer transition-all hover:bg-slate-700 flex items-center gap-2"
+                  >
+                    <Chrome size={14} />
+                    Connect
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Actions */}
