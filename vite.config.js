@@ -5,6 +5,10 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    outDir: 'dist/client',
+    emptyOutDir: true,
+  },
   plugins: [react(), cloudflare({
     persist: false,
     assets: {
