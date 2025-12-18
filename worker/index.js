@@ -540,52 +540,93 @@ async function handleRegister(request, env) {
     // Use provided userId or check by email
     const providedUserId = body.user_id;
     
+    // First, check if user exists by email (most reliable check)
+    const existingByEmail = await env.DB.prepare(
+      'SELECT id FROM users WHERE email = ?'
+    ).bind(email).first();
+    
+    if (existingByEmail) {
+      // User already exists with this email, return their ID
+      return new Response(
+        JSON.stringify({ user_id: existingByEmail.id }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // If userId provided, check if user with that ID exists
     if (providedUserId) {
-      // Check if user with this ID exists
-      const existing = await env.DB.prepare(
+      const existingById = await env.DB.prepare(
         'SELECT id FROM users WHERE id = ?'
       ).bind(providedUserId).first();
       
+      if (existingById) {
+        // User exists with this ID but different email - update email
+        try {
+          await env.DB.prepare(
+            'UPDATE users SET email = ? WHERE id = ?'
+          ).bind(email, providedUserId).run();
+        } catch (updateError) {
+          // If update fails (e.g., email constraint), just return existing user
+          console.warn('Failed to update email:', updateError.message);
+        }
+        return new Response(
+          JSON.stringify({ user_id: existingById.id }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Create user with provided ID
+      try {
+        await env.DB.prepare(
+          'INSERT INTO users (id, email) VALUES (?, ?)'
+        ).bind(providedUserId, email).run();
+        
+        return new Response(
+          JSON.stringify({ user_id: providedUserId }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } }
+        );
+      } catch (insertError) {
+        // If insert fails (e.g., ID already exists), try to get existing user
+        if (insertError.message.includes('UNIQUE') || insertError.message.includes('constraint')) {
+          const existing = await env.DB.prepare(
+            'SELECT id FROM users WHERE id = ?'
+          ).bind(providedUserId).first();
+          if (existing) {
+            return new Response(
+              JSON.stringify({ user_id: existing.id }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+        throw insertError;
+      }
+    }
+    
+    // No userId provided, create new user with generated ID
+    const userId = generateId();
+    try {
+      await env.DB.prepare(
+        'INSERT INTO users (id, email) VALUES (?, ?)'
+      ).bind(userId, email).run();
+      
+      return new Response(
+        JSON.stringify({ user_id: userId }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } }
+      );
+    } catch (insertError) {
+      // If insert fails, email might have been created between checks (race condition)
+      // Try to get existing user by email
+      const existing = await env.DB.prepare(
+        'SELECT id FROM users WHERE email = ?'
+      ).bind(email).first();
       if (existing) {
         return new Response(
           JSON.stringify({ user_id: existing.id }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      
-      // Create user with provided ID
-      await env.DB.prepare(
-        'INSERT INTO users (id, email) VALUES (?, ?)'
-      ).bind(providedUserId, email).run();
-      
-      return new Response(
-        JSON.stringify({ user_id: providedUserId }),
-        { status: 201, headers: { 'Content-Type': 'application/json' } }
-      );
+      throw insertError;
     }
-    
-    // Check if user exists by email
-    const existing = await env.DB.prepare(
-      'SELECT id FROM users WHERE email = ?'
-    ).bind(email).first();
-    
-    if (existing) {
-      return new Response(
-        JSON.stringify({ user_id: existing.id }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    // Create new user
-    const userId = generateId();
-    await env.DB.prepare(
-      'INSERT INTO users (id, email) VALUES (?, ?)'
-    ).bind(userId, email).run();
-    
-    return new Response(
-      JSON.stringify({ user_id: userId }),
-      { status: 201, headers: { 'Content-Type': 'application/json' } }
-    );
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
