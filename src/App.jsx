@@ -197,7 +197,7 @@ function App() {
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <Toaster
-        position="top-right"
+        position="top-center"
         toastOptions={{
           duration: 3000,
           style: {
