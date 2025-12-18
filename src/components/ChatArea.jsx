@@ -20,7 +20,7 @@ export default function ChatArea({ messages, isTyping }) {
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <h2 className="text-3xl font-semibold text-text-primary mb-2">
-                Your Second Brain
+                Welcome to Prosey
               </h2>
               <p className="text-text-secondary mb-8">
                 Upload documents and ask questions

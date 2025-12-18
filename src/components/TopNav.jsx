@@ -4,7 +4,7 @@ export default function TopNav({ onDocumentsClick, onProfileClick }) {
   return (
     <nav className="glass border-b border-border/50 h-12 px-5 flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold text-text-primary">Second Brain</h1>
+        <h1 className="text-lg font-semibold text-text-primary">Prosey: Your Second Brain and Digital Garden</h1>
       </div>
       
       <div className="flex items-center gap-4">

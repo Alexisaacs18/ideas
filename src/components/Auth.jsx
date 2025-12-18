@@ -127,7 +127,7 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
             <div className="w-14 h-14 rounded-xl gradient-accent flex items-center justify-center">
               <span className="text-white font-bold text-2xl">SB</span>
             </div>
-            <h1 className="text-2xl font-semibold text-slate-100">Second Brain</h1>
+            <h1 className="text-2xl font-semibold text-slate-100">Prosey</h1>
           </div>
           
           {/* Mode Tabs */}
