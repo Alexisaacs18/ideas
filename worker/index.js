@@ -8,7 +8,7 @@ import { HfInference } from '@huggingface/inference';
 
 // CORS headers helper
 const corsHeaders = {
-  'Access-Control-Allow-Origin': 'http://localhost:5173',
+  'Access-Control-Allow-Origin': '*', // Allow all origins for production
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
@@ -118,9 +118,9 @@ async function extractTextFromPDF(arrayBuffer) {
     console.log('=== PDF EXTRACTION START ===');
     console.log('Buffer size:', arrayBuffer.byteLength);
     
-    // Use CDN version to avoid Node.js bundling issues
-    const pdfjsModule = await import('https://cdn.jsdelivr.net/npm/pdfjs-serverless@1.1.0/+esm');
-    const { getDocument } = pdfjsModule;
+    // Dynamically import pdfjs-serverless to avoid bundling Node.js dependencies
+    // This library is designed for serverless environments and should work with nodejs_compat
+    const { getDocument } = await import('pdfjs-serverless');
     
     // Load the PDF using pdfjs-serverless (works in Cloudflare Workers)
     const pdf = await getDocument({
@@ -1535,8 +1535,8 @@ export default {
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
-      } else if (path === '/' && request.method === 'GET') {
-        // Root endpoint - return API information
+      } else if (path === '/' && request.method === 'GET' && !env.ASSETS) {
+        // Root endpoint - return API information (only if not serving static files)
         response = new Response(
           JSON.stringify({
             service: 'Document Q&A API',
@@ -1555,23 +1555,43 @@ export default {
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
-      } else {
-        // For non-API routes (like /documents, /, etc.), return a simple message
-        // These are handled by React Router on the frontend
-        if (!path.startsWith('/api')) {
-          response = new Response(
-            JSON.stringify({ 
-              message: 'This is an API endpoint. Use the frontend application for UI routes.',
-              path: path 
-            }),
-            { status: 404, headers: { 'Content-Type': 'application/json' } }
-          );
-        } else {
-          response = new Response(
-            JSON.stringify({ error: 'Not found', path: path }),
-            { status: 404, headers: { 'Content-Type': 'application/json' } }
-          );
+      } else if (!path.startsWith('/api/')) {
+        // Not an API route - serve static files
+        // Check if ASSETS binding exists (for static file serving)
+        if (env.ASSETS) {
+          try {
+            // Try to fetch the requested file
+            const assetResponse = await env.ASSETS.fetch(request);
+            
+            // If found, return it
+            if (assetResponse.status === 200) {
+              return assetResponse;
+            }
+            
+            // If not found and it's a route (no file extension), serve index.html for SPA
+            if (!path.includes('.') || path.endsWith('/')) {
+              const indexRequest = new Request(new URL('/index.html', request.url), request);
+              const indexResponse = await env.ASSETS.fetch(indexRequest);
+              if (indexResponse.status === 200) {
+                return indexResponse;
+              }
+            }
+            
+            // Otherwise return the 404
+            return assetResponse;
+          } catch (error) {
+            console.error('Error serving static file:', error);
+            // Fall through to error handling
+          }
         }
+        
+        // If ASSETS binding doesn't exist, we're using legacy assets format
+        // With legacy assets and not_found_handling = "single-page-application",
+        // the assets system should serve index.html automatically for non-matching routes
+        // However, the Worker is still called, so we need to not interfere
+        // The best approach: redirect to index.html for non-API routes
+        // This ensures the SPA routing works correctly
+        return Response.redirect(new URL('/index.html', request.url), 302);
       }
       
       return addCorsHeaders(response);
