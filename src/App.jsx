@@ -5,6 +5,9 @@ import ChatArea from './components/ChatArea';
 import InputArea from './components/InputArea';
 import DocumentsSidebar from './components/DocumentsSidebar';
 import MainSidebar from './components/MainSidebar';
+import Settings from './components/Settings';
+import Profile from './components/Profile';
+import Auth from './components/Auth';
 import { api } from './utils/api';
 
 function App() {
@@ -41,6 +44,81 @@ function App() {
     return localStorage.getItem('currentChatId') || null;
   });
 
+  // Auth state
+  const [user, setUser] = useState(() => {
+    // Load user from localStorage
+    const stored = localStorage.getItem('user');
+    return stored ? JSON.parse(stored) : null;
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+
+
+  // Handle Google OAuth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const error = urlParams.get('error');
+
+    if (error) {
+      toast.error('Google OAuth failed: ' + error);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    if (code) {
+      // Exchange code for token and get user info
+      const exchangeCode = async () => {
+        try {
+          const redirectUri = window.location.origin;
+          
+          // Try backend first, fallback to frontend if no secret
+          let userData;
+          let usedBackend = false;
+          try {
+            userData = await api.oauthCallback(code, redirectUri);
+            usedBackend = true;
+          } catch (backendError) {
+            // If backend fails (no client secret), try frontend exchange
+            console.log('Backend OAuth not available, using frontend exchange');
+            try {
+              userData = await exchangeCodeFrontend(code, redirectUri);
+            } catch (frontendError) {
+              // If frontend also fails, show the error
+              throw frontendError;
+            }
+          }
+          
+          // Create user object
+          const user = {
+            id: userData.user_id || userData.id,
+            email: userData.email,
+            name: userData.name,
+            avatar: userData.avatar,
+            createdAt: userData.created_at || new Date().toISOString(),
+          };
+          
+          // Store in localStorage
+          localStorage.setItem('user', JSON.stringify(user));
+          setUser(user);
+          
+          toast.success(`Welcome, ${user.name || user.email}!`);
+          
+          // Clean up URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (error) {
+          console.error('OAuth callback error:', error);
+          toast.error(error.message || 'Failed to complete OAuth login');
+          // Clean up URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      };
+      
+      exchangeCode();
+    }
+  }, []);
 
   // Load current chat messages on mount
   useEffect(() => {
@@ -246,11 +324,95 @@ function App() {
   };
 
   const handleProfileClick = () => {
-    toast('Profile settings coming soon!', { icon: '👤' });
+    if (user) {
+      setProfileOpen(true);
+    } else {
+      setAuthOpen(true);
+    }
   };
 
   const handleSettingsClick = () => {
-    toast('Settings coming soon!', { icon: '⚙️' });
+    setSettingsOpen(true);
+  };
+
+  const handleAuthSuccess = (userData) => {
+    setUser(userData);
+    setAuthOpen(false);
+    toast.success(`Welcome, ${userData.name || userData.email}!`);
+  };
+
+  const handleSignOut = () => {
+    setUser(null);
+    localStorage.removeItem('user');
+    setProfileOpen(false);
+    toast.success('Signed out successfully');
+  };
+
+  // Frontend-only OAuth code exchange (fallback if no client secret)
+  const exchangeCodeFrontend = async (code, redirectUri) => {
+    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    const clientSecret = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_SECRET;
+    
+    if (!clientSecret || clientSecret === 'your-google-oauth-client-secret-here') {
+      throw new Error('Client secret required. Please add VITE_GOOGLE_OAUTH_CLIENT_SECRET to .env file, or set GOOGLE_OAUTH_CLIENT_SECRET in Cloudflare Worker secrets.');
+    }
+
+    // Exchange code for token (frontend - less secure, but works for development)
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      throw new Error(`Token exchange failed: ${errorText}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      throw new Error('No access token received');
+    }
+
+    // Get user info from Google
+    const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!userInfoResponse.ok) {
+      throw new Error('Failed to get user info from Google');
+    }
+
+    const googleUser = await userInfoResponse.json();
+
+    // Register user in backend
+    try {
+      await api.register(googleUser.email);
+    } catch (error) {
+      // User might already exist, that's okay
+      console.log('User registration:', error.message);
+    }
+
+    return {
+      user_id: crypto.randomUUID(), // Generate ID
+      id: crypto.randomUUID(),
+      email: googleUser.email,
+      name: googleUser.name || googleUser.email.split('@')[0],
+      avatar: googleUser.picture || null,
+      created_at: new Date().toISOString(),
+    };
   };
 
   const handleNewChat = () => {
@@ -417,6 +579,33 @@ function App() {
         onUpload={handleFileUpload}
         uploadProgress={uploadProgress}
       />
+
+      {/* Settings Modal */}
+      <Settings
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        user={user}
+        documents={documents}
+      />
+
+      {/* Profile Modal (if logged in) */}
+      {user && (
+        <Profile
+          isOpen={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          user={user}
+          onSignOut={handleSignOut}
+        />
+      )}
+
+      {/* Auth Modal (if not logged in and auth is open) */}
+      {!user && (
+        <Auth
+          isOpen={authOpen}
+          onClose={() => setAuthOpen(false)}
+          onAuthSuccess={handleAuthSuccess}
+        />
+      )}
       </div>
   );
 }

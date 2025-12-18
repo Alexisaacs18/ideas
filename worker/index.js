@@ -669,6 +669,128 @@ async function handleUpload(request, env) {
   }
 }
 
+// API Endpoint: OAuth callback - exchange code for token and get user info
+async function handleOAuthCallback(request, env) {
+  try {
+    const body = await parseJSON(request);
+    if (!body || !body.code) {
+      return new Response(
+        JSON.stringify({ error: 'OAuth code is required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const clientId = env.GOOGLE_OAUTH_CLIENT_ID;
+    const clientSecret = env.GOOGLE_OAUTH_CLIENT_SECRET;
+    const redirectUri = body.redirect_uri || 'http://localhost:5173';
+
+    if (!clientId || !clientSecret) {
+      return new Response(
+        JSON.stringify({ error: 'Google OAuth not configured. Please set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET secrets.' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Step 1: Exchange code for access token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code: body.code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error('Token exchange error:', errorText);
+      return new Response(
+        JSON.stringify({ error: 'Failed to exchange OAuth code for token', details: errorText }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      return new Response(
+        JSON.stringify({ error: 'No access token received from Google' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Step 2: Get user info from Google
+    const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!userInfoResponse.ok) {
+      const errorText = await userInfoResponse.text();
+      console.error('User info error:', errorText);
+      return new Response(
+        JSON.stringify({ error: 'Failed to get user info from Google', details: errorText }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const googleUser = await userInfoResponse.json();
+
+    // Step 3: Create or update user in database
+    if (!env.DB) {
+      return new Response(
+        JSON.stringify({ error: 'Database not configured' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if user exists by email
+    const existingUser = await env.DB.prepare(
+      'SELECT id, email FROM users WHERE email = ?'
+    ).bind(googleUser.email).first();
+
+    let userId;
+    if (existingUser) {
+      userId = existingUser.id;
+      // Update user info if needed
+      await env.DB.prepare(
+        'UPDATE users SET email = ? WHERE id = ?'
+      ).bind(googleUser.email, userId).run();
+    } else {
+      // Create new user
+      userId = crypto.randomUUID();
+      await env.DB.prepare(
+        'INSERT INTO users (id, email) VALUES (?, ?)'
+      ).bind(userId, googleUser.email).run();
+    }
+
+    // Return user data
+    return new Response(
+      JSON.stringify({
+        user_id: userId,
+        email: googleUser.email,
+        name: googleUser.name || googleUser.email.split('@')[0],
+        avatar: googleUser.picture || null,
+        created_at: new Date().toISOString(),
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('OAuth callback error:', error);
+    return new Response(
+      JSON.stringify({ error: 'OAuth callback failed', details: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
 // API Endpoint: Chat
 async function handleChat(request, env) {
   try {
@@ -915,6 +1037,8 @@ export default {
       
       if (path === '/api/auth/register' && request.method === 'POST') {
         response = await handleRegister(request, env);
+      } else if (path === '/api/auth/oauth/callback' && request.method === 'POST') {
+        response = await handleOAuthCallback(request, env);
       } else if (path === '/api/upload' && request.method === 'POST') {
         response = await handleUpload(request, env);
       } else if (path === '/api/chat' && request.method === 'POST') {

@@ -72,5 +72,18 @@ export const api = {
     }
     return response.json();
   },
+
+  async oauthCallback(code, redirectUri = window.location.origin) {
+    const response = await fetch(`${API_BASE_URL}/api/auth/oauth/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, redirect_uri: redirectUri }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'OAuth callback failed');
+    }
+    return response.json();
+  },
 };
 
