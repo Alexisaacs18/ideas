@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const ADMIN_PASSWORD = 'S3ahawk-1845!';
@@ -12,6 +12,12 @@ export default function Admin() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  
+  // Table controls
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('documents'); // 'documents', 'chats', 'avgChats', 'status', 'email'
+  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'signedIn', 'anonymous'
 
   // Check authentication on mount
   useEffect(() => {
@@ -143,6 +149,93 @@ export default function Admin() {
     } finally {
       setIsLoadingStats(false);
     }
+  };
+
+  // Filter, sort, and search users
+  const filteredAndSortedUsers = useMemo(() => {
+    if (!stats?.users) return [];
+
+    let filtered = [...stats.users];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(user => {
+        const email = (user.email || '').toLowerCase();
+        const userId = (user.user_id || '').toLowerCase();
+        return email.includes(query) || userId.includes(query);
+      });
+    }
+
+    // Apply status filter
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(user => {
+        const isSignedIn = !!user.email;
+        return filterStatus === 'signedIn' ? isSignedIn : !isSignedIn;
+      });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortBy) {
+        case 'documents':
+          aValue = a.documentCount || 0;
+          bValue = b.documentCount || 0;
+          break;
+        case 'chats':
+          aValue = a.totalChats || 0;
+          bValue = b.totalChats || 0;
+          break;
+        case 'avgChats':
+          aValue = a.averageChatsPerDay || 0;
+          bValue = b.averageChatsPerDay || 0;
+          break;
+        case 'status':
+          aValue = a.email ? 1 : 0; // Signed in = 1, anonymous = 0
+          bValue = b.email ? 1 : 0;
+          break;
+        case 'email':
+          aValue = (a.email || a.user_id || '').toLowerCase();
+          bValue = (b.email || b.user_id || '').toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aValue === 'string') {
+        return sortOrder === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      } else {
+        return sortOrder === 'asc' 
+          ? aValue - bValue
+          : bValue - aValue;
+      }
+    });
+
+    return filtered;
+  }, [stats?.users, searchQuery, filterStatus, sortBy, sortOrder]);
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      // Toggle sort order
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to desc
+      setSortBy(column);
+      setSortOrder('desc');
+    }
+  };
+
+  const getSortIcon = (column) => {
+    if (sortBy !== column) {
+      return <ArrowUpDown className="w-3 h-3 ml-1 text-text-secondary/40" />;
+    }
+    return sortOrder === 'asc' 
+      ? <ArrowUp className="w-3 h-3 ml-1 text-indigo-400" />
+      : <ArrowDown className="w-3 h-3 ml-1 text-indigo-400" />;
   };
 
 
@@ -291,9 +384,51 @@ export default function Admin() {
             {/* Users Table */}
             <div className="glass rounded-xl border border-border/50 overflow-hidden">
               <div className="p-6 border-b border-border/50">
-                <h2 className="text-xl font-semibold text-text-primary">Users</h2>
-                <p className="text-sm text-text-secondary mt-1">
-                  {stats?.users?.length ?? 0} total users
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-text-primary">Users</h2>
+                    <p className="text-sm text-text-secondary mt-1">
+                      {filteredAndSortedUsers.length} of {stats?.users?.length ?? 0} user records
+                      {stats?.totals && (
+                        <span className="ml-2 text-xs text-text-secondary/60">
+                          ({stats.totals.signedInUsers} signed-in users, {stats.totals.anonymousUsers} anonymous sessions)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  
+                  {/* Search and Filter Controls */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Search */}
+                    <div className="relative flex-1 sm:min-w-[200px]">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary/60" />
+                      <input
+                        type="text"
+                        placeholder="Search by email or ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-background/50 border border-border/50 rounded-lg text-sm text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                      />
+                    </div>
+                    
+                    {/* Status Filter */}
+                    <div className="relative">
+                      <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary/60" />
+                      <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="pl-10 pr-8 py-2 bg-background/50 border border-border/50 rounded-lg text-sm text-text-primary focus:outline-none focus:border-indigo-500/50 transition-colors appearance-none cursor-pointer"
+                      >
+                        <option value="all">All Users</option>
+                        <option value="signedIn">Signed In</option>
+                        <option value="anonymous">Anonymous</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-text-secondary/60">
+                  Note: Anonymous users are tracked by browser session. Clearing browser data creates a new session.
                 </p>
               </div>
               
@@ -301,37 +436,71 @@ export default function Admin() {
                 <table className="w-full">
                   <thead className="bg-background/50 border-b border-border/50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
-                        User ID / Email
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider cursor-pointer hover:bg-background/30 transition-colors"
+                        onClick={() => handleSort('email')}
+                      >
+                        <div className="flex items-center">
+                          User (Email or Session ID)
+                          {getSortIcon('email')}
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
-                        Documents
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider cursor-pointer hover:bg-background/30 transition-colors"
+                        onClick={() => handleSort('documents')}
+                      >
+                        <div className="flex items-center">
+                          Documents
+                          {getSortIcon('documents')}
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
-                        Total Chats
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider cursor-pointer hover:bg-background/30 transition-colors"
+                        onClick={() => handleSort('chats')}
+                      >
+                        <div className="flex items-center">
+                          Total Chats
+                          {getSortIcon('chats')}
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
-                        Avg Chats/Day
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider cursor-pointer hover:bg-background/30 transition-colors"
+                        onClick={() => handleSort('avgChats')}
+                      >
+                        <div className="flex items-center">
+                          Avg Chats/Day
+                          {getSortIcon('avgChats')}
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
-                        Status
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider cursor-pointer hover:bg-background/30 transition-colors"
+                        onClick={() => handleSort('status')}
+                      >
+                        <div className="flex items-center">
+                          Status
+                          {getSortIcon('status')}
+                        </div>
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {stats?.users && stats.users.length > 0 ? (
-                      stats.users.map((user, idx) => (
+                    {filteredAndSortedUsers.length > 0 ? (
+                      filteredAndSortedUsers.map((user, idx) => (
                         <tr key={user.user_id || idx} className="hover:bg-background/30 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-text-primary">
-                              {user.email || user.user_id}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-text-primary">
+                            {user.email || `Session: ${user.user_id.substring(0, 8)}...`}
+                          </div>
+                          {user.email ? (
+                            <div className="text-xs text-text-secondary mt-1">
+                              ID: {user.user_id.substring(0, 8)}...
                             </div>
-                            {user.email && (
-                              <div className="text-xs text-text-secondary mt-1">
-                                {user.user_id}
-                              </div>
-                            )}
-                          </td>
+                          ) : (
+                            <div className="text-xs text-text-secondary mt-1">
+                              Anonymous (clearing browser data creates new session)
+                            </div>
+                          )}
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm text-text-primary">{user.documentCount ?? 0}</span>
                           </td>
@@ -357,9 +526,15 @@ export default function Admin() {
                     ) : (
                       <tr>
                         <td colSpan="5" className="px-6 py-12 text-center">
-                          <p className="text-text-secondary">No users found</p>
+                          <p className="text-text-secondary">
+                            {searchQuery || filterStatus !== 'all' 
+                              ? 'No users match your filters' 
+                              : 'No users found'}
+                          </p>
                           <p className="text-xs text-text-secondary/60 mt-2">
-                            Users will appear here once they interact with the app
+                            {searchQuery || filterStatus !== 'all' 
+                              ? 'Try adjusting your search or filter criteria'
+                              : 'Users will appear here once they interact with the app'}
                           </p>
                         </td>
                       </tr>

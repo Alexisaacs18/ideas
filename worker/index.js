@@ -781,12 +781,15 @@ async function handleRegister(request, env) {
     // Use provided userId or check by email
     const providedUserId = body.user_id;
     
+    console.log('Register user:', { email, providedUserId });
+    
     // First, check if user exists by email (most reliable check)
     const existingByEmail = await env.DB.prepare(
       'SELECT id FROM users WHERE email = ?'
     ).bind(email).first();
     
     if (existingByEmail) {
+      console.log('User exists by email:', existingByEmail.id);
       // User already exists with this email, return their ID
       return new Response(
         JSON.stringify({ user_id: existingByEmail.id }),
@@ -801,6 +804,7 @@ async function handleRegister(request, env) {
       ).bind(providedUserId).first();
       
       if (existingById) {
+        console.log('User exists by ID:', existingById.id);
         // User exists with this ID but different email - update email
         try {
           await env.DB.prepare(
@@ -818,21 +822,25 @@ async function handleRegister(request, env) {
       
       // Create user with provided ID
       try {
+        console.log('Creating new user with ID:', providedUserId, 'email:', email);
         await env.DB.prepare(
           'INSERT INTO users (id, email) VALUES (?, ?)'
         ).bind(providedUserId, email).run();
         
+        console.log('User created successfully:', providedUserId);
         return new Response(
           JSON.stringify({ user_id: providedUserId }),
           { status: 201, headers: { 'Content-Type': 'application/json' } }
         );
       } catch (insertError) {
+        console.error('Insert error:', insertError.message);
         // If insert fails (e.g., ID already exists), try to get existing user
         if (insertError.message.includes('UNIQUE') || insertError.message.includes('constraint')) {
           const existing = await env.DB.prepare(
             'SELECT id FROM users WHERE id = ?'
           ).bind(providedUserId).first();
           if (existing) {
+            console.log('User found after constraint error:', existing.id);
             return new Response(
               JSON.stringify({ user_id: existing.id }),
               { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -846,21 +854,25 @@ async function handleRegister(request, env) {
     // No userId provided, create new user with generated ID
     const userId = generateId();
     try {
+      console.log('Creating new user with generated ID:', userId, 'email:', email);
       await env.DB.prepare(
         'INSERT INTO users (id, email) VALUES (?, ?)'
       ).bind(userId, email).run();
       
+      console.log('User created successfully:', userId);
       return new Response(
         JSON.stringify({ user_id: userId }),
         { status: 201, headers: { 'Content-Type': 'application/json' } }
       );
     } catch (insertError) {
+      console.error('Insert error:', insertError.message);
       // If insert fails, email might have been created between checks (race condition)
       // Try to get existing user by email
       const existing = await env.DB.prepare(
         'SELECT id FROM users WHERE email = ?'
       ).bind(email).first();
       if (existing) {
+        console.log('User found after insert error:', existing.id);
         return new Response(
           JSON.stringify({ user_id: existing.id }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -869,6 +881,7 @@ async function handleRegister(request, env) {
       throw insertError;
     }
   } catch (error) {
+    console.error('Register error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -1296,9 +1309,16 @@ async function handleAdminStats(request, env) {
     }
 
     // Get all users
+    console.log('Fetching all users from database...');
     const allUsers = await env.DB.prepare(
       'SELECT id, email FROM users'
     ).all();
+    
+    console.log('Users query result:', {
+      success: !!allUsers,
+      resultsLength: allUsers?.results?.length || 0,
+      firstUser: allUsers?.results?.[0] || null
+    });
 
     if (!allUsers.results || allUsers.results.length === 0) {
       console.log('No users found in database');
@@ -1352,7 +1372,7 @@ async function handleAdminStats(request, env) {
       // Estimate chats: count unique days with messages
       // Get all message timestamps and group by day
       const allMessages = await env.DB.prepare(
-        'SELECT timestamp FROM messages WHERE user_id = ? ORDER BY timestamp ASC'
+        'SELECT created_at FROM messages WHERE user_id = ? ORDER BY created_at ASC'
       ).bind(userId).all();
 
       let totalChatsForUser = 0;
@@ -1365,7 +1385,8 @@ async function handleAdminStats(request, env) {
         let lastTimestamp = null;
 
         for (const msg of allMessages.results) {
-          const timestamp = msg.timestamp ? parseInt(msg.timestamp) : Date.now();
+          // created_at is stored as unix timestamp (seconds), convert to milliseconds
+          const timestamp = msg.created_at ? parseInt(msg.created_at) * 1000 : Date.now();
           if (!firstTimestamp) firstTimestamp = timestamp;
           lastTimestamp = timestamp;
           
@@ -1481,10 +1502,37 @@ async function handleChat(request, env) {
     
     const { question, user_id } = body;
     
-    // Verify user exists
-    const user = await env.DB.prepare(
-      'SELECT id FROM users WHERE id = ?'
+    // Verify user exists, create if not
+    let user = await env.DB.prepare(
+      'SELECT id, email FROM users WHERE id = ?'
     ).bind(user_id).first();
+    
+    if (!user) {
+      // Auto-create user with temporary email
+      const tempEmail = `${user_id}@temp.local`;
+      try {
+        console.log('Creating user in chat handler:', user_id, tempEmail);
+        await env.DB.prepare(
+          'INSERT INTO users (id, email) VALUES (?, ?)'
+        ).bind(user_id, tempEmail).run();
+        user = { id: user_id, email: tempEmail };
+        console.log('User created in chat handler:', user_id);
+      } catch (error) {
+        // If insert fails (e.g., duplicate ID), try to get existing user
+        if (error.message.includes('UNIQUE') || error.message.includes('constraint')) {
+          const existing = await env.DB.prepare(
+            'SELECT id, email FROM users WHERE id = ?'
+          ).bind(user_id).first();
+          if (existing) {
+            user = existing;
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
+    }
     
     if (!user) {
       return new Response(
@@ -1652,6 +1700,37 @@ async function handleAddLink(request, env) {
         JSON.stringify({ error: 'URL and user_id are required' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Verify user exists, create if not
+    let user = await env.DB.prepare(
+      'SELECT id, email FROM users WHERE id = ?'
+    ).bind(userId).first();
+    
+    if (!user) {
+      // Auto-create user with temporary email
+      const tempEmail = `${userId}@temp.local`;
+      try {
+        console.log('Creating user in link handler:', userId, tempEmail);
+        await env.DB.prepare(
+          'INSERT INTO users (id, email) VALUES (?, ?)'
+        ).bind(userId, tempEmail).run();
+        user = { id: userId, email: tempEmail };
+        console.log('User created in link handler:', userId);
+      } catch (error) {
+        if (error.message.includes('UNIQUE') || error.message.includes('constraint')) {
+          const existing = await env.DB.prepare(
+            'SELECT id, email FROM users WHERE id = ?'
+          ).bind(userId).first();
+          if (existing) {
+            user = existing;
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
     }
 
     // Validate URL
@@ -1836,6 +1915,37 @@ async function handleAddText(request, env) {
         JSON.stringify({ error: 'Content and user_id are required' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Verify user exists, create if not
+    let user = await env.DB.prepare(
+      'SELECT id, email FROM users WHERE id = ?'
+    ).bind(userId).first();
+    
+    if (!user) {
+      // Auto-create user with temporary email
+      const tempEmail = `${userId}@temp.local`;
+      try {
+        console.log('Creating user in text handler:', userId, tempEmail);
+        await env.DB.prepare(
+          'INSERT INTO users (id, email) VALUES (?, ?)'
+        ).bind(userId, tempEmail).run();
+        user = { id: userId, email: tempEmail };
+        console.log('User created in text handler:', userId);
+      } catch (error) {
+        if (error.message.includes('UNIQUE') || error.message.includes('constraint')) {
+          const existing = await env.DB.prepare(
+            'SELECT id, email FROM users WHERE id = ?'
+          ).bind(userId).first();
+          if (existing) {
+            user = existing;
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
     }
 
     // Check document limit
