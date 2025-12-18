@@ -15,7 +15,12 @@ export default function Admin() {
 
   // Debug: Log when Admin component mounts
   useEffect(() => {
+    console.log('=== ADMIN OAUTH DEBUG ===');
     console.log('Admin component mounted at path:', window.location.pathname);
+    console.log('Current URL:', window.location.href);
+    console.log('Origin:', window.location.origin);
+    console.log('Environment:', import.meta.env.MODE);
+    console.log('Client ID from env:', import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID ? 'Set' : 'Not set');
     loadOAuthClientId();
   }, []);
 
@@ -85,7 +90,16 @@ export default function Admin() {
     // Use the loaded Client ID (from env var or API)
     const clientId = oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
     
+    // === COMPREHENSIVE DEBUG LOGGING ===
+    console.log('=== OAUTH DEBUG: handleGoogleAuth called ===');
+    console.log('Client ID:', clientId ? `${clientId.substring(0, 20)}...` : 'NOT SET');
+    console.log('Current URL:', window.location.href);
+    console.log('Origin:', window.location.origin);
+    console.log('Pathname:', window.location.pathname);
+    console.log('Environment:', import.meta.env.MODE);
+    
     if (!clientId || clientId === 'your-google-oauth-client-id-here') {
+      console.error('❌ OAuth Client ID not configured');
       toast.error('Google OAuth not configured. Please set GOOGLE_OAUTH_CLIENT_ID in Cloudflare secrets.');
       return;
     }
@@ -100,18 +114,38 @@ export default function Admin() {
       const redirectUri = `${origin}/admin`;
       const scope = 'openid email profile';
       
-      // Log to console for debugging
-      console.log('Admin OAuth Redirect URI:', redirectUri);
-      console.log('Current origin:', window.location.origin);
+      // === DETAILED LOGGING ===
+      console.log('=== OAUTH REQUEST DETAILS ===');
+      console.log('Origin (cleaned):', origin);
+      console.log('Redirect URI:', redirectUri);
+      console.log('Scope:', scope);
+      console.log('Client ID (first 20 chars):', clientId.substring(0, 20) + '...');
       
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+      const authParams = {
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
         scope: scope,
         access_type: 'offline',
         prompt: 'consent',
-      })}`;
+      };
+      
+      console.log('OAuth Parameters:', authParams);
+      
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(authParams)}`;
+      
+      console.log('=== FULL OAUTH URL ===');
+      console.log('URL (first 200 chars):', authUrl.substring(0, 200) + '...');
+      console.log('Full URL:', authUrl);
+      console.log('=== END OAUTH DEBUG ===');
+      console.log('');
+      console.log('📋 INSTRUCTIONS:');
+      console.log('1. Copy the Redirect URI above');
+      console.log('2. Go to Google Cloud Console → APIs & Services → Credentials');
+      console.log('3. Click on your OAuth 2.0 Client ID');
+      console.log('4. Add the Redirect URI to "Authorized redirect URIs"');
+      console.log('5. Make sure it matches EXACTLY (including /admin path)');
+      console.log('');
 
       // Handle OAuth callback
       const urlParams = new URLSearchParams(window.location.search);
@@ -119,6 +153,10 @@ export default function Admin() {
       const error = urlParams.get('error');
 
       if (error) {
+        console.error('=== OAUTH ERROR ===');
+        console.error('Error code:', error);
+        console.error('Error description:', urlParams.get('error_description'));
+        console.error('Current URL:', window.location.href);
         toast.error(`OAuth error: ${error}`);
         window.history.replaceState({}, document.title, '/admin');
         setIsAuthLoading(false);
@@ -126,9 +164,15 @@ export default function Admin() {
       }
 
       if (code) {
+        console.log('=== OAUTH CALLBACK ===');
+        console.log('Received authorization code');
+        console.log('Redirect URI used:', redirectUri);
+        
         // Exchange code for token and verify email
         // Pass is_admin flag to backend
         const result = await api.oauthCallback(code, redirectUri, null, true);
+        
+        console.log('OAuth callback result:', result);
         
         // Verify email is admin email (backend should have already checked, but double-check)
         if (result.email && result.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
@@ -142,6 +186,7 @@ export default function Admin() {
           // Clean URL
           window.history.replaceState({}, document.title, '/admin');
         } else {
+          console.error('Access denied - email mismatch:', result.email);
           toast.error('Access denied. Only authorized administrators can access this page.');
           setIsAuthenticated(false);
         }
@@ -150,9 +195,13 @@ export default function Admin() {
       }
 
       // Redirect to Google OAuth
+      console.log('Redirecting to Google OAuth...');
       window.location.href = authUrl;
     } catch (err) {
-      console.error('Auth error:', err);
+      console.error('=== OAUTH EXCEPTION ===');
+      console.error('Error:', err);
+      console.error('Error message:', err.message);
+      console.error('Error stack:', err.stack);
       toast.error(err.message || 'Authentication failed');
       setIsAuthLoading(false);
     }

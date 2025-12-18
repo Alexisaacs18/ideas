@@ -117,7 +117,16 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
     // Use the loaded Client ID (from env var or API)
     const clientId = oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
     
+    // === COMPREHENSIVE DEBUG LOGGING ===
+    console.log('=== OAUTH DEBUG: handleGoogleAuth (Main Auth) ===');
+    console.log('Client ID:', clientId ? `${clientId.substring(0, 20)}...` : 'NOT SET');
+    console.log('Current URL:', window.location.href);
+    console.log('Origin:', window.location.origin);
+    console.log('Pathname:', window.location.pathname);
+    console.log('Environment:', import.meta.env.MODE);
+    
     if (!clientId || clientId === 'your-google-oauth-client-id-here') {
+      console.error('❌ OAuth Client ID not configured');
       toast.error('Google OAuth not configured');
       return;
     }
@@ -128,20 +137,42 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
     const scope = 'openid email profile';
     const responseType = 'code';
     
-    // Log to console for debugging
-    console.log('OAuth Redirect URI:', redirectUri);
-    console.log('Current URL:', window.location.href);
+    // === DETAILED LOGGING ===
+    console.log('=== OAUTH REQUEST DETAILS ===');
+    console.log('Origin (cleaned):', redirectUri);
+    console.log('Redirect URI:', redirectUri);
+    console.log('Scope:', scope);
+    console.log('Client ID (first 20 chars):', clientId.substring(0, 20) + '...');
+    
+    const authParams = {
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: responseType,
+      scope: scope,
+      access_type: 'offline',
+      prompt: 'consent',
+    };
+    
+    console.log('OAuth Parameters:', authParams);
     
     // Build Google OAuth URL
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${encodeURIComponent(clientId)}&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `response_type=${responseType}&` +
-      `scope=${encodeURIComponent(scope)}&` +
-      `access_type=offline&` +
-      `prompt=consent`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(authParams)}`;
+    
+    console.log('=== FULL OAUTH URL ===');
+    console.log('URL (first 200 chars):', authUrl.substring(0, 200) + '...');
+    console.log('Full URL:', authUrl);
+    console.log('=== END OAUTH DEBUG ===');
+    console.log('');
+    console.log('📋 INSTRUCTIONS:');
+    console.log('1. Copy the Redirect URI above');
+    console.log('2. Go to Google Cloud Console → APIs & Services → Credentials');
+    console.log('3. Click on your OAuth 2.0 Client ID');
+    console.log('4. Add the Redirect URI to "Authorized redirect URIs"');
+    console.log('5. Make sure it matches EXACTLY (no trailing slash)');
+    console.log('');
 
     // Redirect to Google OAuth
+    console.log('Redirecting to Google OAuth...');
     window.location.href = authUrl;
   };
 

@@ -110,21 +110,40 @@ export const api = {
   },
 
   async oauthCallback(code, redirectUri = window.location.origin, anonymousUserId = null, isAdmin = false) {
+    console.log('=== API OAUTH CALLBACK ===');
+    console.log('Code received:', code ? `${code.substring(0, 20)}...` : 'No code');
+    console.log('Redirect URI:', redirectUri);
+    console.log('Anonymous User ID:', anonymousUserId);
+    console.log('Is Admin:', isAdmin);
+    console.log('API Base URL:', API_BASE_URL);
+    
+    const requestBody = { 
+      code, 
+      redirect_uri: redirectUri,
+      anonymous_user_id: anonymousUserId, // Send anonymous userId to transfer data on first sign-in
+      is_admin: isAdmin // Flag for admin authentication
+    };
+    
+    console.log('Request body:', { ...requestBody, code: code ? `${code.substring(0, 20)}...` : null });
+    
     const response = await fetch(`${API_BASE_URL}/api/auth/oauth/callback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        code, 
-        redirect_uri: redirectUri,
-        anonymous_user_id: anonymousUserId, // Send anonymous userId to transfer data on first sign-in
-        is_admin: isAdmin // Flag for admin authentication
-      }),
+      body: JSON.stringify(requestBody),
     });
+    
+    console.log('Response status:', response.status);
+    console.log('Response ok:', response.ok);
+    
     if (!response.ok) {
       const error = await response.json();
+      console.error('OAuth callback error:', error);
       throw new Error(error.error || 'OAuth callback failed');
     }
-    return response.json();
+    
+    const result = await response.json();
+    console.log('OAuth callback success:', result);
+    return result;
   },
 
   async addLink(url, userId) {
