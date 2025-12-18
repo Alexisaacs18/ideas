@@ -8,5 +8,8 @@ export default defineConfig({
     emptyOutDir: true,
   },
   plugins: [react()],
+  server: {
+    historyApiFallback: true, // Important for SPA routing in dev
+  },
 })
 

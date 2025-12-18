@@ -12,4 +12,15 @@ export default defineConfig({
       notFoundHandling: 'single-page-application'
     }
   })],
+  server: {
+    // Ensure all routes fall back to index.html for SPA routing in dev
+    historyApiFallback: true,
+    // Proxy API requests to avoid CORS issues in dev
+    proxy: {
+      '/api': {
+        target: 'https://hidden-grass-22b6.alexisaacs18.workers.dev',
+        changeOrigin: true,
+      }
+    }
+  },
 })

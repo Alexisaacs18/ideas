@@ -1200,6 +1200,17 @@ async function handleOAuthCallback(request, env) {
 
     const googleUser = await userInfoResponse.json();
 
+    // Check if this is an admin OAuth request (from /admin route)
+    const isAdminRequest = body.is_admin === true;
+    const ADMIN_EMAIL = 'alexisaacs18@gmail.com';
+    
+    if (isAdminRequest && googleUser.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      return new Response(
+        JSON.stringify({ error: 'Access denied. Only authorized administrators can access this page.' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Step 3: Create or update user in database
     if (!env.DB) {
       return new Response(
@@ -1269,6 +1280,148 @@ async function handleOAuthCallback(request, env) {
     console.error('OAuth callback error:', error);
     return new Response(
       JSON.stringify({ error: 'OAuth callback failed', details: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// API Endpoint: Admin Stats
+async function handleAdminStats(request, env) {
+  try {
+    if (!env.DB) {
+      return new Response(
+        JSON.stringify({ error: 'Database not configured' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get all users
+    const allUsers = await env.DB.prepare(
+      'SELECT id, email FROM users'
+    ).all();
+
+    if (!allUsers.results) {
+      return new Response(
+        JSON.stringify({ users: [], totals: {
+          totalUsers: 0,
+          signedInUsers: 0,
+          anonymousUsers: 0,
+          totalDocuments: 0,
+          totalChats: 0,
+          averageChatsPerDay: 0,
+        }}),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const users = [];
+    let totalDocuments = 0;
+    let totalChats = 0;
+    let signedInUsers = 0;
+    let anonymousUsers = 0;
+
+    // Calculate stats for each user
+    for (const user of allUsers.results) {
+      const userId = user.id;
+      const email = user.email;
+
+      // Count documents
+      const docCount = await env.DB.prepare(
+        'SELECT COUNT(*) as count FROM documents WHERE user_id = ?'
+      ).bind(userId).first();
+      const documentCount = docCount?.count || 0;
+      totalDocuments += documentCount;
+
+      // Count total messages (as proxy for chats since we don't track separate chat sessions)
+      const messageCount = await env.DB.prepare(
+        'SELECT COUNT(*) as count FROM messages WHERE user_id = ?'
+      ).bind(userId).first();
+      const totalMessages = messageCount?.count || 0;
+
+      // Estimate chats: count unique days with messages
+      // Get all message timestamps and group by day
+      const allMessages = await env.DB.prepare(
+        'SELECT timestamp FROM messages WHERE user_id = ? ORDER BY timestamp ASC'
+      ).bind(userId).all();
+
+      let totalChatsForUser = 0;
+      let averageChatsPerDay = 0;
+
+      if (allMessages.results && allMessages.results.length > 0) {
+        // Group messages by day (timestamp in milliseconds)
+        const daysSet = new Set();
+        let firstTimestamp = null;
+        let lastTimestamp = null;
+
+        for (const msg of allMessages.results) {
+          const timestamp = msg.timestamp ? parseInt(msg.timestamp) : Date.now();
+          if (!firstTimestamp) firstTimestamp = timestamp;
+          lastTimestamp = timestamp;
+          
+          // Convert to day (YYYY-MM-DD format)
+          const date = new Date(timestamp);
+          const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+          daysSet.add(dayKey);
+        }
+
+        const uniqueDays = daysSet.size;
+        
+        // Estimate chats: at least 1 chat per day with messages
+        // Plus additional chats based on message volume (rough estimate: 10 messages per chat)
+        const estimatedChatsFromVolume = Math.ceil(totalMessages / 10);
+        totalChatsForUser = Math.max(uniqueDays, estimatedChatsFromVolume);
+
+        // Calculate average chats per day
+        if (firstTimestamp && lastTimestamp) {
+          const daysDiff = Math.max(1, Math.ceil((lastTimestamp - firstTimestamp) / (1000 * 60 * 60 * 24)) + 1);
+          averageChatsPerDay = totalChatsForUser / daysDiff;
+        } else {
+          averageChatsPerDay = totalChatsForUser;
+        }
+      }
+
+      totalChats += totalChatsForUser;
+
+      // Determine if signed in or anonymous
+      const isSignedIn = email && !email.endsWith('@temp.local');
+
+      if (isSignedIn) {
+        signedInUsers++;
+      } else {
+        anonymousUsers++;
+      }
+
+      users.push({
+        user_id: userId,
+        email: email && !email.endsWith('@temp.local') ? email : null,
+        documentCount,
+        totalChats: totalChatsForUser,
+        averageChatsPerDay,
+      });
+    }
+
+    // Calculate overall average chats per day
+    const overallAverageChatsPerDay = users.length > 0 
+      ? users.reduce((sum, u) => sum + u.averageChatsPerDay, 0) / users.length 
+      : 0;
+
+    const totals = {
+      totalUsers: allUsers.results.length,
+      signedInUsers,
+      anonymousUsers,
+      totalDocuments,
+      totalChats,
+      averageChatsPerDay: overallAverageChatsPerDay,
+    };
+
+    return new Response(
+      JSON.stringify({ users, totals }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Admin stats error:', error);
+    return new Response(
+      JSON.stringify({ error: 'Failed to fetch admin stats', details: error.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
@@ -1862,6 +2015,8 @@ export default {
         response = await handleAddText(request, env);
       } else if (path.startsWith('/api/documents/') && request.method === 'DELETE') {
         response = await handleDeleteDocument(request, env);
+      } else if (path === '/api/admin/stats' && request.method === 'GET') {
+        response = await handleAdminStats(request, env);
       } else if (path === '/api/debug/secret' && request.method === 'GET') {
         // Debug endpoint to check if secret is accessible
         const hasKey = !!env.HUGGINGFACE;

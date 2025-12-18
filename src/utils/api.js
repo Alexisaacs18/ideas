@@ -109,14 +109,15 @@ export const api = {
     return response.json();
   },
 
-  async oauthCallback(code, redirectUri = window.location.origin, anonymousUserId = null) {
+  async oauthCallback(code, redirectUri = window.location.origin, anonymousUserId = null, isAdmin = false) {
     const response = await fetch(`${API_BASE_URL}/api/auth/oauth/callback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         code, 
         redirect_uri: redirectUri,
-        anonymous_user_id: anonymousUserId // Send anonymous userId to transfer data on first sign-in
+        anonymous_user_id: anonymousUserId, // Send anonymous userId to transfer data on first sign-in
+        is_admin: isAdmin // Flag for admin authentication
       }),
     });
     if (!response.ok) {
