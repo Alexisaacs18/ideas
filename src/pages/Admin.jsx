@@ -11,12 +11,34 @@ export default function Admin() {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [oauthClientId, setOauthClientId] = useState(null);
 
   // Debug: Log when Admin component mounts
   useEffect(() => {
     console.log('Admin component mounted at path:', window.location.pathname);
-    console.log('Google OAuth Client ID:', import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID ? 'Set' : 'Not set');
+    loadOAuthClientId();
   }, []);
+
+  const loadOAuthClientId = async () => {
+    // Try to get Client ID from environment variable first (for local dev)
+    let clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    
+    // If not set, try to fetch from backend API (for production)
+    if (!clientId || clientId === 'your-google-oauth-client-id-here') {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev'}/api/config/oauth-client-id`);
+        if (response.ok) {
+          const data = await response.json();
+          clientId = data.clientId;
+        }
+      } catch (err) {
+        console.error('Failed to load OAuth Client ID from backend:', err);
+      }
+    }
+    
+    setOauthClientId(clientId);
+    console.log('Google OAuth Client ID:', clientId ? 'Set' : 'Not set');
+  };
 
   // Check authentication on mount
   useEffect(() => {
@@ -60,10 +82,11 @@ export default function Admin() {
   };
 
   const handleGoogleAuth = async () => {
-    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    // Use the loaded Client ID (from env var or API)
+    const clientId = oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
     
     if (!clientId || clientId === 'your-google-oauth-client-id-here') {
-      toast.error('Google OAuth not configured');
+      toast.error('Google OAuth not configured. Please set GOOGLE_OAUTH_CLIENT_ID in Cloudflare secrets.');
       return;
     }
 
@@ -157,15 +180,16 @@ export default function Admin() {
     }
   };
 
-  // Debug logging
-  const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+  // Use the loaded Client ID (from env var or API)
+  const clientId = oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
   const hasGoogleOAuth = clientId && clientId !== 'your-google-oauth-client-id-here';
   
   console.log('Admin render state:', {
     isLoading,
     isAuthenticated,
     hasGoogleOAuth,
-    clientId: clientId ? 'Set' : 'Not set'
+    clientId: clientId ? 'Set' : 'Not set',
+    oauthClientId: oauthClientId ? 'Loaded from API' : 'Not loaded'
   });
 
   if (isLoading) {

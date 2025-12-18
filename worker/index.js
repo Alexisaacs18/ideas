@@ -2017,6 +2017,13 @@ export default {
         response = await handleDeleteDocument(request, env);
       } else if (path === '/api/admin/stats' && request.method === 'GET') {
         response = await handleAdminStats(request, env);
+      } else if (path === '/api/config/oauth-client-id' && request.method === 'GET') {
+        // Expose OAuth Client ID to frontend (Client IDs are public, not secret)
+        const clientId = env.GOOGLE_OAUTH_CLIENT_ID;
+        response = new Response(
+          JSON.stringify({ clientId: clientId || null }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
       } else if (path === '/api/debug/secret' && request.method === 'GET') {
         // Debug endpoint to check if secret is accessible
         const hasKey = !!env.HUGGINGFACE;
