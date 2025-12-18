@@ -6,9 +6,12 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
+		"build:worker": "vite build --config vite.config.js",
+		"build:pages": "vite build --config vite.config.pages.js",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
-		"deploy": "npm run build && wrangler deploy"
+		"deploy": "npm run build:worker && wrangler deploy",
+		"deploy:pages": "npm run build:pages"
 	},
 	"dependencies": {
 		"@huggingface/inference": "^4.13.5",

@@ -3,12 +3,8 @@ import react from '@vitejs/plugin-react'
 
 import { cloudflare } from "@cloudflare/vite-plugin";
 
-// https://vite.dev/config/
+// Vite config for Worker deployment (includes both Worker and client assets)
 export default defineConfig({
-  build: {
-    outDir: 'dist/client',
-    emptyOutDir: true,
-  },
   plugins: [react(), cloudflare({
     persist: false,
     assets: {
