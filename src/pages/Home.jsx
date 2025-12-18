@@ -4,6 +4,7 @@ import TopNav from '../components/TopNav';
 import ChatArea from '../components/ChatArea';
 import InputArea from '../components/InputArea';
 import MainSidebar from '../components/MainSidebar';
+import DocumentsSidebar from '../components/DocumentsSidebar';
 import Settings from '../components/Settings';
 import Profile from '../components/Profile';
 import Auth from '../components/Auth';
@@ -19,7 +20,11 @@ export default function Home() {
   });
 
   const [messages, setMessages] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [mainSidebarOpen, setMainSidebarOpen] = useState(() => {
     const stored = localStorage.getItem('sidebarOpen');
     return stored ? JSON.parse(stored) : false;
@@ -44,13 +49,24 @@ export default function Home() {
     const registerUser = async () => {
       try {
         const email = user?.email || `${userId}@temp.local`;
-        await api.registerUser(email);
+        await api.register(email);
       } catch (error) {
         console.error('Failed to register user:', error);
       }
     };
     registerUser();
+    loadDocuments();
   }, [userId, user]);
+
+  const loadDocuments = async () => {
+    try {
+      const docs = await api.getDocuments(userId);
+      setDocuments(docs);
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+      setDocuments([]);
+    }
+  };
 
   // Handle Google OAuth callback
   useEffect(() => {
@@ -309,6 +325,88 @@ export default function Home() {
     }
   };
 
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['application/pdf', 'text/plain'];
+    const validExtensions = ['.pdf', '.txt'];
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    
+    if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+      toast.error('Please upload a PDF or TXT file');
+      return;
+    }
+
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    try {
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      const result = await api.uploadFile(file, userId);
+      
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      toast.success(`${file.name} uploaded successfully!`);
+      
+      // Reload documents
+      await loadDocuments();
+      
+      // Reset progress after a delay
+      setTimeout(() => {
+        setUploadProgress(null);
+        setUploading(false);
+      }, 500);
+    } catch (error) {
+      toast.error(error.message || 'Upload failed');
+      setUploadProgress(null);
+      setUploading(false);
+      console.error('Upload error:', error);
+    }
+  };
+
+  const handleDeleteDocument = async (documentId) => {
+    if (!confirm('Are you sure you want to delete this document?')) {
+      return;
+    }
+
+    try {
+      await api.deleteDocument(documentId);
+      toast.success('Document deleted');
+      await loadDocuments();
+      
+      // Remove messages that reference this document
+      setMessages((prev) =>
+        prev.filter((msg) => {
+          if (msg.sources) {
+            return !msg.sources.some((s) => s.doc_id === documentId);
+          }
+          return true;
+        })
+      );
+    } catch (error) {
+      toast.error(error.message || 'Delete failed');
+      console.error('Delete error:', error);
+    }
+  };
+
   const handleDeleteAllChats = () => {
     const allChatIds = chatHistory.map(chat => chat.id);
     allChatIds.forEach(chatId => {
@@ -382,6 +480,7 @@ export default function Home() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopNav
+          onDocumentsClick={() => setSidebarOpen(true)}
           onProfileClick={handleProfileClick}
         />
 
@@ -391,12 +490,22 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Documents Sidebar */}
+      <DocumentsSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        documents={documents}
+        onDelete={handleDeleteDocument}
+        onUpload={handleFileUpload}
+        uploadProgress={uploadProgress}
+      />
+
       {/* Modals */}
       <Settings
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         user={user}
-        documents={[]}
+        documents={documents}
         chatHistory={chatHistory}
         onDeleteAllChats={handleDeleteAllChats}
         onDeleteAccount={handleDeleteAccount}
