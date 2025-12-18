@@ -1300,7 +1300,8 @@ async function handleAdminStats(request, env) {
       'SELECT id, email FROM users'
     ).all();
 
-    if (!allUsers.results) {
+    if (!allUsers.results || allUsers.results.length === 0) {
+      console.log('No users found in database');
       return new Response(
         JSON.stringify({ users: [], totals: {
           totalUsers: 0,
@@ -1310,9 +1311,19 @@ async function handleAdminStats(request, env) {
           totalChats: 0,
           averageChatsPerDay: 0,
         }}),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 200, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          } 
+        }
       );
     }
+    
+    console.log(`Found ${allUsers.results.length} users in database`);
 
     const users = [];
     let totalDocuments = 0;
@@ -1416,13 +1427,30 @@ async function handleAdminStats(request, env) {
 
     return new Response(
       JSON.stringify({ users, totals }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 200, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        } 
+      }
     );
   } catch (error) {
     console.error('Admin stats error:', error);
+    console.error('Error stack:', error.stack);
     return new Response(
       JSON.stringify({ error: 'Failed to fetch admin stats', details: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 500, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        } 
+      }
     );
   }
 }

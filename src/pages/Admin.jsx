@@ -22,6 +22,19 @@ export default function Admin() {
   useEffect(() => {
     if (isAuthenticated) {
       loadStats();
+    } else {
+      // Initialize with empty stats so table structure shows
+      setStats({
+        users: [],
+        totals: {
+          totalUsers: 0,
+          signedInUsers: 0,
+          anonymousUsers: 0,
+          totalDocuments: 0,
+          totalChats: 0,
+          averageChatsPerDay: 0,
+        }
+      });
     }
   }, [isAuthenticated]);
 
@@ -104,15 +117,29 @@ export default function Admin() {
         },
       });
       
+      console.log('Admin stats response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to load stats');
+        const errorText = await response.text();
+        console.error('Admin stats error response:', errorText);
+        throw new Error(`Failed to load stats: ${response.status} ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('Admin stats data received:', data);
+      console.log('Users count:', data.users?.length || 0);
+      console.log('Totals:', data.totals);
+      
+      if (!data.users || !data.totals) {
+        console.error('Invalid data structure:', data);
+        throw new Error('Invalid response format');
+      }
+      
       setStats(data);
     } catch (err) {
       console.error('Failed to load stats:', err);
-      toast.error('Failed to load statistics');
+      console.error('Error details:', err.message, err.stack);
+      toast.error(`Failed to load statistics: ${err.message}`);
     } finally {
       setIsLoadingStats(false);
     }
@@ -213,7 +240,7 @@ export default function Admin() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-text-secondary" />
           </div>
-        ) : stats ? (
+        ) : (
           <>
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -222,9 +249,11 @@ export default function Admin() {
                   <span className="text-sm text-text-secondary">Total Users</span>
                   <Users className="w-5 h-5 text-indigo-500" />
                 </div>
-                <p className="text-3xl font-bold text-text-primary">{stats.totals.totalUsers}</p>
+                <p className="text-3xl font-bold text-text-primary">
+                  {stats?.totals?.totalUsers ?? 0}
+                </p>
                 <p className="text-xs text-text-secondary mt-1">
-                  {stats.totals.signedInUsers} signed in, {stats.totals.anonymousUsers} anonymous
+                  {stats?.totals?.signedInUsers ?? 0} signed in, {stats?.totals?.anonymousUsers ?? 0} anonymous
                 </p>
               </div>
 
@@ -233,7 +262,9 @@ export default function Admin() {
                   <span className="text-sm text-text-secondary">Total Documents</span>
                   <FileText className="w-5 h-5 text-green-500" />
                 </div>
-                <p className="text-3xl font-bold text-text-primary">{stats.totals.totalDocuments}</p>
+                <p className="text-3xl font-bold text-text-primary">
+                  {stats?.totals?.totalDocuments ?? 0}
+                </p>
               </div>
 
               <div className="glass p-6 rounded-xl border border-border/50">
@@ -241,7 +272,9 @@ export default function Admin() {
                   <span className="text-sm text-text-secondary">Total Chats</span>
                   <MessageSquare className="w-5 h-5 text-blue-500" />
                 </div>
-                <p className="text-3xl font-bold text-text-primary">{stats.totals.totalChats}</p>
+                <p className="text-3xl font-bold text-text-primary">
+                  {stats?.totals?.totalChats ?? 0}
+                </p>
               </div>
 
               <div className="glass p-6 rounded-xl border border-border/50">
@@ -250,7 +283,7 @@ export default function Admin() {
                   <TrendingUp className="w-5 h-5 text-purple-500" />
                 </div>
                 <p className="text-3xl font-bold text-text-primary">
-                  {stats.totals.averageChatsPerDay.toFixed(1)}
+                  {(stats?.totals?.averageChatsPerDay ?? 0).toFixed(1)}
                 </p>
               </div>
             </div>
@@ -260,7 +293,7 @@ export default function Admin() {
               <div className="p-6 border-b border-border/50">
                 <h2 className="text-xl font-semibold text-text-primary">Users</h2>
                 <p className="text-sm text-text-secondary mt-1">
-                  {stats.users.length} total users
+                  {stats?.users?.length ?? 0} total users
                 </p>
               </div>
               
@@ -286,40 +319,51 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {stats.users.map((user, idx) => (
-                      <tr key={user.user_id || idx} className="hover:bg-background/30 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-text-primary">
-                            {user.email || user.user_id}
-                          </div>
-                          {user.email && (
-                            <div className="text-xs text-text-secondary mt-1">
-                              {user.user_id}
+                    {stats?.users && stats.users.length > 0 ? (
+                      stats.users.map((user, idx) => (
+                        <tr key={user.user_id || idx} className="hover:bg-background/30 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-text-primary">
+                              {user.email || user.user_id}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-text-primary">{user.documentCount}</span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-text-primary">{user.totalChats}</span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-text-primary">
-                            {user.averageChatsPerDay.toFixed(1)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            user.email 
-                              ? 'bg-green-500/20 text-green-400' 
-                              : 'bg-gray-500/20 text-gray-400'
-                          }`}>
-                            {user.email ? 'Signed In' : 'Anonymous'}
-                          </span>
+                            {user.email && (
+                              <div className="text-xs text-text-secondary mt-1">
+                                {user.user_id}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-text-primary">{user.documentCount ?? 0}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-text-primary">{user.totalChats ?? 0}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-text-primary">
+                              {(user.averageChatsPerDay ?? 0).toFixed(1)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              user.email 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : 'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {user.email ? 'Signed In' : 'Anonymous'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-12 text-center">
+                          <p className="text-text-secondary">No users found</p>
+                          <p className="text-xs text-text-secondary/60 mt-2">
+                            Users will appear here once they interact with the app
+                          </p>
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                   <tfoot className="bg-background/50 border-t-2 border-border/50">
                     <tr>
@@ -328,22 +372,22 @@ export default function Admin() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-semibold text-text-primary">
-                          {stats.totals.totalDocuments}
+                          {stats?.totals?.totalDocuments ?? 0}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-semibold text-text-primary">
-                          {stats.totals.totalChats}
+                          {stats?.totals?.totalChats ?? 0}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-semibold text-text-primary">
-                          {stats.totals.averageChatsPerDay.toFixed(1)}
+                          {(stats?.totals?.averageChatsPerDay ?? 0).toFixed(1)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-semibold text-text-secondary">
-                          {stats.totals.signedInUsers} signed in, {stats.totals.anonymousUsers} anonymous
+                          {stats?.totals?.signedInUsers ?? 0} signed in, {stats?.totals?.anonymousUsers ?? 0} anonymous
                         </span>
                       </td>
                     </tr>
@@ -352,10 +396,6 @@ export default function Admin() {
               </div>
             </div>
           </>
-        ) : (
-          <div className="text-center py-20">
-            <p className="text-text-secondary">No statistics available</p>
-          </div>
         )}
       </div>
     </div>
