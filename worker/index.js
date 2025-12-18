@@ -632,6 +632,30 @@ async function handleSignup(request, env) {
       'INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)'
     ).bind(userId, email, passwordHash, name).run();
     
+    // Transfer data from anonymous account on signup (if provided)
+    const anonymousUserId = body.anonymous_user_id;
+    if (anonymousUserId && anonymousUserId !== userId) {
+      // Check if anonymous user has any documents
+      const anonymousDocs = await env.DB.prepare(
+        'SELECT COUNT(*) as count FROM documents WHERE user_id = ?'
+      ).bind(anonymousUserId).first();
+      
+      if (anonymousDocs && anonymousDocs.count > 0) {
+        // Transfer documents
+        await env.DB.prepare(
+          'UPDATE documents SET user_id = ? WHERE user_id = ?'
+        ).bind(userId, anonymousUserId).run();
+        
+        // Transfer embeddings (via document_id update - they're linked)
+        // Embeddings are already linked to documents, so they transfer automatically
+        
+        // Transfer messages
+        await env.DB.prepare(
+          'UPDATE messages SET user_id = ? WHERE user_id = ?'
+        ).bind(userId, anonymousUserId).run();
+      }
+    }
+    
     return new Response(
       JSON.stringify({ 
         user_id: userId,
@@ -1189,22 +1213,47 @@ async function handleOAuthCallback(request, env) {
       'SELECT id, email FROM users WHERE email = ?'
     ).bind(googleUser.email).first();
 
+    const anonymousUserId = body.anonymous_user_id;
     let userId;
+    let isNewUser = false;
+    
     if (existingUser) {
+      // Existing user - sign in, NO data transfer
       userId = existingUser.id;
       // Update user info if needed
       await env.DB.prepare(
         'UPDATE users SET email = ? WHERE id = ?'
       ).bind(googleUser.email, userId).run();
     } else {
-      // Create new user
+      // New user - sign up, transfer data if anonymous account exists
+      isNewUser = true;
       userId = crypto.randomUUID();
       await env.DB.prepare(
         'INSERT INTO users (id, email) VALUES (?, ?)'
       ).bind(userId, googleUser.email).run();
+      
+      // Transfer data from anonymous account ONLY on signup
+      if (anonymousUserId && anonymousUserId !== userId) {
+        // Check if anonymous user has any documents
+        const anonymousDocs = await env.DB.prepare(
+          'SELECT COUNT(*) as count FROM documents WHERE user_id = ?'
+        ).bind(anonymousUserId).first();
+        
+        if (anonymousDocs && anonymousDocs.count > 0) {
+          // Transfer documents
+          await env.DB.prepare(
+            'UPDATE documents SET user_id = ? WHERE user_id = ?'
+          ).bind(userId, anonymousUserId).run();
+          
+          // Transfer messages
+          await env.DB.prepare(
+            'UPDATE messages SET user_id = ? WHERE user_id = ?'
+          ).bind(userId, anonymousUserId).run();
+        }
+      }
     }
 
-    // Return user data
+    // Return user data with flag indicating if this is a new user (signup) or existing (signin)
     return new Response(
       JSON.stringify({
         user_id: userId,
@@ -1212,6 +1261,7 @@ async function handleOAuthCallback(request, env) {
         name: googleUser.name || googleUser.email.split('@')[0],
         avatar: googleUser.picture || null,
         created_at: new Date().toISOString(),
+        is_new_user: isNewUser, // Flag to indicate if this was a signup (true) or signin (false)
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );

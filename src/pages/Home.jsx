@@ -12,6 +12,11 @@ import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../utils/api';
 
 export default function Home() {
+  // Helper functions to scope localStorage keys to userId
+  const getChatHistoryKey = (uid) => `chatHistory_${uid}`;
+  const getCurrentChatKey = (uid) => `currentChatId_${uid}`;
+  const getChatDataKey = (uid, chatId) => `chat_${uid}_${chatId}`;
+
   const [userId, setUserId] = useState(() => {
     const stored = localStorage.getItem('userId');
     if (stored) return stored;
@@ -30,12 +35,13 @@ export default function Home() {
     const stored = localStorage.getItem('sidebarOpen');
     return stored ? JSON.parse(stored) : false;
   });
+  
   const [chatHistory, setChatHistory] = useState(() => {
-    const stored = localStorage.getItem('chatHistory');
+    const stored = localStorage.getItem(getChatHistoryKey(userId));
     return stored ? JSON.parse(stored) : [];
   });
   const [currentChatId, setCurrentChatId] = useState(() => {
-    return localStorage.getItem('currentChatId') || null;
+    return localStorage.getItem(getCurrentChatKey(userId)) || null;
   });
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem('user');
@@ -161,6 +167,11 @@ export default function Home() {
           if (userData) {
             // Always use the userId returned from OAuth (authenticated user's ID)
             const authenticatedUserId = userData.user_id;
+            const oldUserId = userId;
+            
+            // Check if this is a new user (signup) or existing user (signin)
+            // Backend returns is_new_user flag, or we can check if user existed before
+            const isSignUp = userData.is_new_user === true || !user;
             
             // Update userId to authenticated user's ID
             setUserId(authenticatedUserId);
@@ -178,7 +189,42 @@ export default function Home() {
               name: userData.name,
               avatar: userData.avatar,
             }));
-            toast.success('Signed in successfully!');
+            
+            // Clear old user's chats from localStorage if signing IN (not signing up)
+            if (!isSignUp && oldUserId !== authenticatedUserId) {
+              // Clear anonymous user's localStorage chats
+              localStorage.removeItem(getChatHistoryKey(oldUserId));
+              localStorage.removeItem(getCurrentChatKey(oldUserId));
+              if (currentChatId) {
+                localStorage.removeItem(getChatDataKey(oldUserId, currentChatId));
+              }
+              // Clear local state
+              setChatHistory([]);
+              setCurrentChatId(null);
+              setMessages([]);
+            } else if (isSignUp) {
+              // On signup, chats were transferred by backend, but localStorage still has old keys
+              // We need to migrate localStorage chats to new userId
+              const oldChatHistory = localStorage.getItem(getChatHistoryKey(oldUserId));
+              if (oldChatHistory && oldUserId !== authenticatedUserId) {
+                // Copy chat history to new userId
+                localStorage.setItem(getChatHistoryKey(authenticatedUserId), oldChatHistory);
+                // Copy individual chat data
+                try {
+                  const chats = JSON.parse(oldChatHistory);
+                  chats.forEach(chat => {
+                    const oldChatData = localStorage.getItem(getChatDataKey(oldUserId, chat.id));
+                    if (oldChatData) {
+                      localStorage.setItem(getChatDataKey(authenticatedUserId, chat.id), oldChatData);
+                    }
+                  });
+                } catch (e) {
+                  console.error('Error migrating chats:', e);
+                }
+              }
+            }
+            
+            toast.success(isSignUp ? 'Account created successfully!' : 'Signed in successfully!');
             
             // Reload documents with the authenticated userId
             loadDocuments();
@@ -197,6 +243,38 @@ export default function Home() {
     }
   }, []);
 
+  // Update chat history when userId changes
+  useEffect(() => {
+    const stored = localStorage.getItem(getChatHistoryKey(userId));
+    if (stored) {
+      try {
+        setChatHistory(JSON.parse(stored));
+      } catch (e) {
+        setChatHistory([]);
+      }
+    } else {
+      setChatHistory([]);
+    }
+    
+    const storedChatId = localStorage.getItem(getCurrentChatKey(userId));
+    setCurrentChatId(storedChatId || null);
+    
+    if (storedChatId) {
+      const chatData = localStorage.getItem(getChatDataKey(userId, storedChatId));
+      if (chatData) {
+        try {
+          setMessages(JSON.parse(chatData));
+        } catch (e) {
+          setMessages([]);
+        }
+      } else {
+        setMessages([]);
+      }
+    } else {
+      setMessages([]);
+    }
+  }, [userId]);
+
   // Check for pending chat ID from navigation (when coming from Documents page)
   useEffect(() => {
     const pendingChatId = localStorage.getItem('pendingChatId');
@@ -214,7 +292,7 @@ export default function Home() {
     if (!chatId) {
       chatId = crypto.randomUUID();
       setCurrentChatId(chatId);
-      localStorage.setItem('currentChatId', chatId);
+      localStorage.setItem(getCurrentChatKey(userId), chatId);
       
       const newChat = {
         id: chatId,
@@ -223,7 +301,7 @@ export default function Home() {
       };
       setChatHistory(prev => {
         const updated = [newChat, ...prev];
-        localStorage.setItem('chatHistory', JSON.stringify(updated));
+        localStorage.setItem(getChatHistoryKey(userId), JSON.stringify(updated));
         return updated;
       });
     }
@@ -238,7 +316,7 @@ export default function Home() {
 
     setMessages(prev => {
       const updated = [...prev, userMessage];
-      localStorage.setItem(`chat_${chatId}`, JSON.stringify(updated));
+      localStorage.setItem(getChatDataKey(userId, chatId), JSON.stringify(updated));
       return updated;
     });
 
@@ -257,7 +335,7 @@ export default function Home() {
 
       setMessages(prev => {
         const updated = [...prev, assistantMessage];
-        localStorage.setItem(`chat_${chatId}`, JSON.stringify(updated));
+        localStorage.setItem(getChatDataKey(userId, chatId), JSON.stringify(updated));
         return updated;
       });
 
@@ -268,7 +346,7 @@ export default function Home() {
           const updated = prev.map(chat => 
             chat.id === chatId ? { ...chat, title } : chat
           );
-          localStorage.setItem('chatHistory', JSON.stringify(updated));
+          localStorage.setItem(getChatHistoryKey(userId), JSON.stringify(updated));
           return updated;
         });
       }
@@ -283,14 +361,14 @@ export default function Home() {
   const handleNewChat = () => {
     setCurrentChatId(null);
     setMessages([]);
-    localStorage.removeItem('currentChatId');
+    localStorage.removeItem(getCurrentChatKey(userId));
   };
 
   const handleSelectChat = (chatId) => {
     setCurrentChatId(chatId);
-    localStorage.setItem('currentChatId', chatId);
+    localStorage.setItem(getCurrentChatKey(userId), chatId);
     
-    const chatData = localStorage.getItem(`chat_${chatId}`);
+    const chatData = localStorage.getItem(getChatDataKey(userId, chatId));
     if (chatData) {
       try {
         setMessages(JSON.parse(chatData));
@@ -315,15 +393,15 @@ export default function Home() {
     const { chatId } = deleteChatModal;
     setChatHistory(prev => {
       const updated = prev.filter(chat => chat.id !== chatId);
-      localStorage.setItem('chatHistory', JSON.stringify(updated));
+      localStorage.setItem(getChatHistoryKey(userId), JSON.stringify(updated));
       return updated;
     });
-    localStorage.removeItem(`chat_${chatId}`);
+    localStorage.removeItem(getChatDataKey(userId, chatId));
     
     if (currentChatId === chatId) {
       setCurrentChatId(null);
       setMessages([]);
-      localStorage.removeItem('currentChatId');
+      localStorage.removeItem(getCurrentChatKey(userId));
     }
     setDeleteChatModal({ isOpen: false, chatId: null });
   };
@@ -335,11 +413,19 @@ export default function Home() {
   const handleSignOut = () => {
     // Sign out and clear userId to start a fresh anonymous session
     // This ensures accounts are separate after first sign-in
+    const oldUserId = userId;
+    
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('userId'); // Clear userId to start new anonymous session
-    localStorage.removeItem('chatHistory'); // Clear chat history
-    localStorage.removeItem('currentChatId'); // Clear current chat
+    
+    // Clear old user's chats from localStorage
+    localStorage.removeItem(getChatHistoryKey(oldUserId));
+    localStorage.removeItem(getCurrentChatKey(oldUserId));
+    // Clear all chat data for old user (we can't enumerate all, but clear current)
+    if (currentChatId) {
+      localStorage.removeItem(getChatDataKey(oldUserId, currentChatId));
+    }
     
     // Generate new anonymous userId
     const newAnonymousId = crypto.randomUUID();
@@ -356,15 +442,12 @@ export default function Home() {
     toast.success('Signed out successfully');
   };
 
-  const handleAuthSuccess = async (userData) => {
-    // For email/password auth, use the userId from userData or generate new one
-    const authenticatedUserId = userData.id || userData.user_id || crypto.randomUUID();
+  const handleAuthSuccess = async (userData, isSignUp = false) => {
+    // For email/password auth, use the userId from userData
+    const authenticatedUserId = userData.id || userData.user_id;
+    const oldUserId = userId;
     
-    // Get current anonymous userId to potentially transfer data
-    const anonymousUserId = localStorage.getItem('userId');
-    
-    // If this is first sign-in and we have anonymous data, we could transfer it here
-    // For now, just switch to authenticated account
+    // Switch to authenticated account
     setUserId(authenticatedUserId);
     localStorage.setItem('userId', authenticatedUserId);
     
@@ -381,8 +464,34 @@ export default function Home() {
       avatar: userData.avatar,
     }));
     
+    // Clear old user's chats from localStorage if signing IN (not signing up)
+    // On signup, chats are transferred by backend, so we keep localStorage chats
+    if (!isSignUp && oldUserId !== authenticatedUserId) {
+      // Clear anonymous user's localStorage chats
+      localStorage.removeItem(getChatHistoryKey(oldUserId));
+      localStorage.removeItem(getCurrentChatKey(oldUserId));
+      if (currentChatId) {
+        localStorage.removeItem(getChatDataKey(oldUserId, currentChatId));
+      }
+      // Clear local state
+      setChatHistory([]);
+      setCurrentChatId(null);
+      setMessages([]);
+    } else if (isSignUp) {
+      // On signup, load chats for the new user (they were transferred by backend)
+      // Chats in localStorage will be for the new userId after transfer
+      const newChatHistory = localStorage.getItem(getChatHistoryKey(authenticatedUserId));
+      if (newChatHistory) {
+        try {
+          setChatHistory(JSON.parse(newChatHistory));
+        } catch (e) {
+          setChatHistory([]);
+        }
+      }
+    }
+    
     setAuthOpen(false);
-    toast.success('Signed in successfully!');
+    toast.success(isSignUp ? 'Account created successfully!' : 'Signed in successfully!');
     
     // Reload documents with authenticated userId
     await loadDocuments();
@@ -492,14 +601,14 @@ export default function Home() {
   const handleDeleteAllChats = () => {
     const allChatIds = chatHistory.map(chat => chat.id);
     allChatIds.forEach(chatId => {
-      localStorage.removeItem(`chat_${chatId}`);
+      localStorage.removeItem(getChatDataKey(userId, chatId));
     });
     
     setChatHistory([]);
     setCurrentChatId(null);
     setMessages([]);
-    localStorage.removeItem('chatHistory');
-    localStorage.removeItem('currentChatId');
+    localStorage.removeItem(getChatHistoryKey(userId));
+    localStorage.removeItem(getCurrentChatKey(userId));
     toast.success('All chats deleted');
   };
 

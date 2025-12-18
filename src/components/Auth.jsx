@@ -57,10 +57,11 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
       let userData;
       
       if (isSignUp) {
-        // Sign up
-        userData = await api.signup(trimmedEmail, password, name || undefined);
+        // Sign up - transfer anonymous data
+        const anonymousUserId = localStorage.getItem('userId');
+        userData = await api.signup(trimmedEmail, password, name || undefined, anonymousUserId);
       } else {
-        // Login - should NEVER create accounts, only validate
+        // Login - should NEVER create accounts or transfer data, only validate
         userData = await api.login(trimmedEmail, password);
       }
       
@@ -73,7 +74,8 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
         avatar: null,
       };
       
-      onAuthSuccess(formattedUserData);
+      // Pass isSignUp flag so frontend knows whether to clear or keep chats
+      onAuthSuccess(formattedUserData, isSignUp);
     } catch (err) {
       const errorMessage = err.message || (isSignUp ? 'Signup failed' : 'Login failed');
       setError(errorMessage);

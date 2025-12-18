@@ -1,10 +1,13 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev';
 
 export const api = {
-  async signup(email, password, name = null) {
+  async signup(email, password, name = null, anonymousUserId = null) {
     const body = { email, password };
     if (name) {
       body.name = name;
+    }
+    if (anonymousUserId) {
+      body.anonymous_user_id = anonymousUserId;
     }
     const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
       method: 'POST',
