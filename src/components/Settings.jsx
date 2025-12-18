@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, User, Bell, Trash2, Moon, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { X, User, Bell, Trash2, Lock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export default function Settings({ 
@@ -12,44 +12,16 @@ export default function Settings({
   onDeleteAccount
 }) {
   const [emailNotifications, setEmailNotifications] = useState(true);
-  const [theme, setTheme] = useState(() => {
-    // Load theme from localStorage or default to dark
-    const saved = localStorage.getItem('theme');
-    return saved || 'dark';
-  });
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
-  // Initialize theme on mount
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'light') {
-      root.classList.remove('dark');
-    } else {
-      root.classList.add('dark');
-    }
-  }, []);
 
   if (!isOpen) return null;
 
   const documentCount = documents.length;
   const documentLimit = 50;
   const storagePercent = Math.max((documentCount / documentLimit) * 100, 2); // Min 2% to show progress bar
-
-  const handleThemeChange = (newTheme) => {
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    // Apply theme to document root
-    const root = document.documentElement;
-    if (newTheme === 'light') {
-      root.classList.remove('dark');
-    } else {
-      root.classList.add('dark');
-    }
-    toast.success(`Theme changed to ${newTheme === 'light' ? 'Light' : 'Dark'} mode`);
-  };
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
@@ -171,33 +143,6 @@ export default function Settings({
                   Change
                 </button>
               )}
-            </div>
-          </section>
-
-          {/* Preferences Section */}
-          <section className="mb-8">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
-              Preferences
-            </h3>
-            
-            <div className="flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700 rounded-lg">
-              <div className="flex items-center gap-3 flex-1">
-                <Moon size={18} className="text-slate-400" />
-                <div>
-                  <div className="text-sm font-medium text-slate-100">Theme</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    {theme === 'dark' ? 'Dark mode' : 'Light mode'}
-                  </div>
-                </div>
-              </div>
-              <select 
-                value={theme}
-                onChange={(e) => handleThemeChange(e.target.value)}
-                className="px-3 py-1.5 bg-slate-800 border border-slate-600 rounded-md text-slate-100 text-xs cursor-pointer dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 bg-white border-gray-300 text-gray-900"
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </select>
             </div>
           </section>
 
