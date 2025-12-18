@@ -245,14 +245,16 @@ export default function MainSidebar({
                         key={chat.id}
                         onClick={() => handleSelectChat(chat.id)}
                         className={`
-                          w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 text-left
+                          w-full flex items-center gap-2.5 px-3 py-2 rounded-md transition-all duration-150 text-left
                           ${currentChatId === chat.id
                             ? 'bg-indigo-500/10 text-slate-100 border border-indigo-500/20'
                             : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
                           }
                         `}
                       >
-                        <MessageSquare size={14} className="flex-shrink-0" />
+                        <div className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-start">
+                          <MessageSquare size={14} />
+                        </div>
                         <span className="flex-1 text-sm truncate">
                           {chat.title || 'New Chat'}
                         </span>

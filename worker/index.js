@@ -4,8 +4,7 @@
  */
 
 import { HfInference } from '@huggingface/inference';
-import { getDocument } from 'pdfjs-serverless';
-import Papa from 'papaparse';
+// pdfjs-serverless and papaparse will be imported dynamically to avoid Node.js dependencies
 
 // CORS headers helper
 const corsHeaders = {
@@ -113,11 +112,15 @@ function cleanText(text) {
     .trim();
 }
 
-// Utility: Extract text from PDF using pdfjs-serverless
+// Utility: Extract text from PDF using CDN version of pdfjs-serverless
 async function extractTextFromPDF(arrayBuffer) {
   try {
     console.log('=== PDF EXTRACTION START ===');
     console.log('Buffer size:', arrayBuffer.byteLength);
+    
+    // Use CDN version to avoid Node.js bundling issues
+    const pdfjsModule = await import('https://cdn.jsdelivr.net/npm/pdfjs-serverless@1.1.0/+esm');
+    const { getDocument } = pdfjsModule;
     
     // Load the PDF using pdfjs-serverless (works in Cloudflare Workers)
     const pdf = await getDocument({
@@ -178,52 +181,78 @@ async function processCSV(csvText, fileName) {
   console.log('=== CSV PROCESSING ===');
   console.log('CSV length:', csvText.length);
   
-  return new Promise((resolve, reject) => {
-    Papa.parse(csvText, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: true,
-      complete: (results) => {
-        console.log('CSV parsed, rows:', results.data.length);
-        console.log('Headers:', results.meta.fields);
-        
-        const headers = results.meta.fields || [];
-        const rows = results.data;
-        
-        let text = `CSV File: ${fileName}\n\n`;
-        text += `This dataset contains ${rows.length} records with the following information:\n\n`;
-        
-        // Add column descriptions
-        headers.forEach(header => {
-          const values = rows.map(r => r[header]).filter(v => v !== null && v !== undefined);
-          const uniqueValues = [...new Set(values)].slice(0, 5);
-          
-          text += `${header}:\n`;
-          if (uniqueValues.length > 0) {
-            text += `  Examples: ${uniqueValues.join(', ')}\n`;
-          }
-          text += `  Total entries: ${values.length}\n\n`;
-        });
-        
-        // Add full data
-        text += `\n\nComplete Data:\n\n`;
-        rows.forEach((row, idx) => {
-          text += `Record ${idx + 1}: `;
-          text += headers.map(h => `${h}: ${row[h]}`).join(', ');
-          text += '\n';
-        });
-        
-        console.log('CSV converted to text, length:', text.length);
-        console.log('Preview:', text.substring(0, 500));
-        
-        resolve(text);
-      },
-      error: (error) => {
-        console.error('CSV parse error:', error);
-        reject(new Error(`CSV parsing failed: ${error.message}`));
+  // Use simple CSV parser (no external dependencies, Worker-compatible)
+  const lines = csvText.split('\n').filter(line => line.trim());
+  if (lines.length === 0) {
+    throw new Error('CSV file is empty');
+  }
+  
+  // Parse header
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  
+  // Parse rows
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    
+    // Simple CSV parsing (handles quoted fields)
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let j = 0; j < line.length; j++) {
+      const char = line[j];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
       }
-    });
+    }
+    values.push(current.trim()); // Last value
+    
+    if (values.length === headers.length) {
+      const row = {};
+      headers.forEach((header, idx) => {
+        row[header] = values[idx]?.replace(/^"|"$/g, '') || '';
+      });
+      rows.push(row);
+    }
+  }
+  
+  console.log('CSV parsed, rows:', rows.length);
+  console.log('Headers:', headers);
+  
+  let text = `CSV File: ${fileName}\n\n`;
+  text += `This dataset contains ${rows.length} records with the following information:\n\n`;
+  
+  // Add column descriptions
+  headers.forEach(header => {
+    const values = rows.map(r => r[header]).filter(v => v !== null && v !== undefined && v !== '');
+    const uniqueValues = [...new Set(values)].slice(0, 5);
+    
+    text += `${header}:\n`;
+    if (uniqueValues.length > 0) {
+      text += `  Examples: ${uniqueValues.join(', ')}\n`;
+    }
+    text += `  Total entries: ${values.length}\n\n`;
   });
+  
+  // Add full data
+  text += `\n\nComplete Data:\n\n`;
+  rows.forEach((row, idx) => {
+    text += `Record ${idx + 1}: `;
+    text += headers.map(h => `${h}: ${row[h] || ''}`).join(', ');
+    text += '\n';
+  });
+  
+  console.log('CSV converted to text, length:', text.length);
+  console.log('Preview:', text.substring(0, 500));
+  
+  return text;
 }
 
 // Utility: Extract text from image using OCR.space API
