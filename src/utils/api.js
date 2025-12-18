@@ -11,7 +11,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error('Registration failed');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Registration failed' }));
+      throw new Error(error.error || 'Registration failed');
+    }
     return response.json();
   },
 

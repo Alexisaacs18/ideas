@@ -36,13 +36,29 @@ export default function Documents() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
 
-  // Get userId from localStorage
-  const userId = localStorage.getItem('userId') || crypto.randomUUID();
+  // Get userId from localStorage, create if doesn't exist
+  const [userId] = useState(() => {
+    const stored = localStorage.getItem('userId');
+    if (stored) return stored;
+    const tempId = crypto.randomUUID();
+    localStorage.setItem('userId', tempId);
+    return tempId;
+  });
 
-  // Load documents on mount
+  // Register user on mount (for anonymous users)
   useEffect(() => {
+    const registerUser = async () => {
+      try {
+        const email = `${userId}@temp.local`;
+        await api.register(email, userId);
+      } catch (error) {
+        console.error('Failed to register user:', error);
+        // Don't block - upload will handle user creation
+      }
+    };
+    registerUser();
     loadDocuments();
-  }, []);
+  }, [userId]);
 
   const loadDocuments = async () => {
     try {

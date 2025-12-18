@@ -643,10 +643,13 @@ async function handleUpload(request, env) {
       'SELECT id, email FROM users WHERE id = ?'
     ).bind(userId).first();
     
+    // Use a variable to track the actual user ID (userId parameter is const)
+    let actualUserId = userId;
+    
     if (!user) {
       // Auto-create user with temporary email
       // Use a unique email format to avoid conflicts
-      const tempEmail = `${userId}@temp.local`;
+      const tempEmail = `${actualUserId}@temp.local`;
       
       // Check if this email already exists (shouldn't happen, but be safe)
       const existingByEmail = await env.DB.prepare(
@@ -655,23 +658,24 @@ async function handleUpload(request, env) {
       
       if (existingByEmail) {
         // User already exists with this email, use that ID
-        userId = existingByEmail.id;
+        actualUserId = existingByEmail.id;
         user = existingByEmail;
       } else {
         // Create new user with unique email
         try {
           await env.DB.prepare(
             'INSERT INTO users (id, email) VALUES (?, ?)'
-          ).bind(userId, tempEmail).run();
-          user = { id: userId, email: tempEmail };
+          ).bind(actualUserId, tempEmail).run();
+          user = { id: actualUserId, email: tempEmail };
         } catch (error) {
           // If insert fails (e.g., duplicate ID), try to get existing user
           if (error.message.includes('UNIQUE') || error.message.includes('constraint')) {
             const existing = await env.DB.prepare(
               'SELECT id, email FROM users WHERE id = ?'
-            ).bind(userId).first();
+            ).bind(actualUserId).first();
             if (existing) {
               user = existing;
+              actualUserId = existing.id;
             } else {
               throw error;
             }
@@ -680,6 +684,9 @@ async function handleUpload(request, env) {
           }
         }
       }
+    } else {
+      // User exists, use their ID
+      actualUserId = user.id;
     }
     
     const filename = file.name;
@@ -794,7 +801,7 @@ async function handleUpload(request, env) {
     
     // Store file in R2
     const documentId = generateId();
-    const filePath = `${userId}/${documentId}/${filename}`;
+    const filePath = `${actualUserId}/${documentId}/${filename}`;
     
     // Reset file stream for R2 upload
     const fileBuffer = await file.arrayBuffer();
@@ -807,7 +814,7 @@ async function handleUpload(request, env) {
     // Save document metadata
     await env.DB.prepare(
       'INSERT INTO documents (id, user_id, filename, file_path, size_bytes) VALUES (?, ?, ?, ?, ?)'
-    ).bind(documentId, userId, filename, filePath, fileSize).run();
+    ).bind(documentId, actualUserId, filename, filePath, fileSize).run();
     
     // Save embeddings in batch using D1 batch API for efficiency
     const embeddingStatements = embeddings.map((emb) => {

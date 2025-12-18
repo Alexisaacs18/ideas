@@ -49,9 +49,18 @@ export default function Home() {
     const registerUser = async () => {
       try {
         const email = user?.email || `${userId}@temp.local`;
-        await api.register(email);
+        // Always pass userId to ensure the user is created with the correct ID
+        // This ensures anonymous users work without sign-in
+        const result = await api.register(email, userId);
+        // Update userId if registration returned a different ID (shouldn't happen, but be safe)
+        if (result.user_id && result.user_id !== userId) {
+          setUserId(result.user_id);
+          localStorage.setItem('userId', result.user_id);
+        }
       } catch (error) {
         console.error('Failed to register user:', error);
+        // Don't block the app if registration fails - upload will handle user creation
+        // This allows the app to work even if registration fails
       }
     };
     registerUser();
