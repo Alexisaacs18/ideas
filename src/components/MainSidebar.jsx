@@ -1,200 +1,198 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
+  Menu, 
   MessageSquare, 
-  Plus, 
-  Settings, 
-  User, 
   FileText, 
-  X, 
-  Trash2,
-  ChevronRight,
-  History
+  Settings, 
+  User
 } from 'lucide-react';
 
+// SidebarItem component with tooltip
+function SidebarItem({ 
+  icon: Icon, 
+  label, 
+  onClick, 
+  active = false,
+  isOpen,
+  badge
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={onClick}
+        onMouseEnter={() => !isOpen && setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        className={`
+          w-full h-12 flex items-center transition-all duration-200
+          ${isOpen ? 'justify-start px-4 gap-3' : 'justify-center'}
+          ${active 
+            ? 'bg-slate-800 text-slate-100' 
+            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+          }
+          rounded-lg
+        `}
+      >
+        <Icon className="w-5 h-5 flex-shrink-0" />
+        {isOpen && (
+          <span className="text-sm font-medium flex-1 text-left">{label}</span>
+        )}
+        {badge && isOpen && (
+          <span className="bg-accent text-white text-xs px-2 py-0.5 rounded-full">
+            {badge}
+          </span>
+        )}
+      </button>
+      
+      {/* Tooltip when closed */}
+      {!isOpen && showTooltip && (
+        <div className="absolute left-full ml-2 px-3 py-2 bg-slate-800 text-slate-100 text-sm rounded-lg shadow-lg z-50 whitespace-nowrap pointer-events-none">
+          {label}
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full">
+            <div className="border-4 border-transparent border-r-slate-800"></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MainSidebar({ 
-  isOpen, 
-  onClose, 
-  onNewChat,
+  isOpen,
+  onToggle,
   onDocumentsClick,
   onSettingsClick,
   onProfileClick,
   chatHistory = [],
-  onSelectChat,
-  onDeleteChat,
-  currentChatId
+  activeSection = 'chats',
+  onSectionChange
 }) {
-  const [activeSection, setActiveSection] = useState('chats');
+  const [isMobile, setIsMobile] = useState(false);
 
-  if (!isOpen) return null;
+  // Detect mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // ESC to close on mobile
+      if (e.key === 'Escape' && isOpen && isMobile) {
+        onToggle();
+      }
+      // Cmd/Ctrl+B to toggle
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        onToggle();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isMobile, onToggle]);
+
+  // Sidebar width
+  const sidebarWidth = isOpen ? 'w-60' : 'w-16';
+  const sidebarClasses = `
+    h-screen
+    bg-slate-900 border-r border-slate-700
+    flex flex-col
+    transition-all duration-300 ease-in-out
+    ${sidebarWidth}
+    ${isMobile && isOpen ? 'shadow-2xl fixed left-0 top-0 z-40' : ''}
+  `;
+
+  // Main content margin
+  const mainContentMargin = isOpen ? 'ml-60' : 'ml-16';
 
   return (
     <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity"
-        onClick={onClose}
-      />
-      
+      {/* Mobile overlay */}
+      {isMobile && isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-20"
+          onClick={onToggle}
+        />
+      )}
+
       {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-80 bg-surface border-r border-border/50 z-50 flex flex-col shadow-2xl transform transition-transform duration-300 ease-in-out">
-        {/* Header */}
-        <div className="p-4 border-b border-border/50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg gradient-accent flex items-center justify-center">
-              <span className="text-white font-bold text-sm">SB</span>
-            </div>
-            <h2 className="text-lg font-semibold text-text-primary">Second Brain</h2>
+      <aside className={sidebarClasses}>
+        {/* Logo at top of sidebar */}
+        <div className="flex justify-center py-3 px-3 border-b border-slate-700">
+          <div className="w-6 h-6 rounded-lg gradient-accent flex items-center justify-center">
+            <span className="text-white font-bold text-xs">SB</span>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-surface/80 flex items-center justify-center transition-colors"
-          >
-            <X size={18} className="text-text-secondary" />
-          </button>
         </div>
 
-        {/* New Chat Button */}
-        <div className="p-4 border-b border-border/50">
-          <button
-            onClick={onNewChat}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-accent hover:bg-accent/90 text-white font-medium transition-colors"
-          >
-            <Plus size={20} />
-            <span>New Chat</span>
-          </button>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-border/50">
-          <button
-            onClick={() => setActiveSection('chats')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeSection === 'chats'
-                ? 'text-accent border-b-2 border-accent'
-                : 'text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <MessageSquare size={16} />
-              <span>Chats</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveSection('history')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeSection === 'history'
-                ? 'text-accent border-b-2 border-accent'
-                : 'text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <History size={16} />
-              <span>History</span>
-            </div>
-          </button>
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto">
-          {activeSection === 'chats' && (
-            <div className="p-2">
-              {chatHistory.length === 0 ? (
-                <div className="text-center py-12 px-4">
-                  <MessageSquare size={48} className="mx-auto text-text-tertiary mb-4 opacity-50" />
-                  <p className="text-text-secondary text-sm">No chats yet</p>
-                  <p className="text-text-tertiary text-xs mt-1">Start a new conversation</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {chatHistory.map((chat) => (
-                    <div
-                      key={chat.id}
-                      className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                        currentChatId === chat.id
-                          ? 'bg-accent/10 border border-accent/20'
-                          : 'hover:bg-surface/80'
-                      }`}
-                      onClick={() => onSelectChat(chat.id)}
-                    >
-                      <MessageSquare 
-                        size={18} 
-                        className={`flex-shrink-0 ${
-                          currentChatId === chat.id ? 'text-accent' : 'text-text-tertiary'
-                        }`} 
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-text-primary truncate">
-                          {chat.title || 'New Chat'}
-                        </p>
-                        {chat.lastMessage && (
-                          <p className="text-xs text-text-tertiary truncate mt-0.5">
-                            {chat.lastMessage}
-                          </p>
-                        )}
-                        {chat.timestamp && (
-                          <p className="text-xs text-text-tertiary mt-1">
-                            {new Date(chat.timestamp).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteChat(chat.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-surface transition-all"
-                      >
-                        <Trash2 size={14} className="text-text-tertiary hover:text-red-400" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeSection === 'history' && (
-            <div className="p-2">
-              <div className="text-center py-12 px-4">
-                <History size={48} className="mx-auto text-text-tertiary mb-4 opacity-50" />
-                <p className="text-text-secondary text-sm">Chat history</p>
-                <p className="text-text-tertiary text-xs mt-1">Your conversation history will appear here</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="border-t border-border/50 p-2 space-y-1">
-          <button
-            onClick={onDocumentsClick}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/80 transition-colors text-text-secondary hover:text-text-primary"
-          >
-            <FileText size={18} />
-            <span className="text-sm font-medium">My Documents</span>
-            <ChevronRight size={16} className="ml-auto text-text-tertiary" />
-          </button>
+        {/* Top section */}
+        <div className="flex flex-col gap-1 p-2 flex-1 overflow-y-auto">
+          <SidebarItem
+            icon={Menu}
+            label="Menu"
+            onClick={onToggle}
+            active={false}
+            isOpen={isOpen}
+          />
           
-          <button
-            onClick={onSettingsClick}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/80 transition-colors text-text-secondary hover:text-text-primary"
-          >
-            <Settings size={18} />
-            <span className="text-sm font-medium">Settings</span>
-            <ChevronRight size={16} className="ml-auto text-text-tertiary" />
-          </button>
-          
-          <button
-            onClick={onProfileClick}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/80 transition-colors text-text-secondary hover:text-text-primary"
-          >
-            <User size={18} />
-            <span className="text-sm font-medium">Profile</span>
-            <ChevronRight size={16} className="ml-auto text-text-tertiary" />
-          </button>
+          <SidebarItem
+            icon={MessageSquare}
+            label="Chats"
+            onClick={() => {
+              if (onSectionChange) onSectionChange('chats');
+              if (isMobile && isOpen) onToggle();
+            }}
+            active={activeSection === 'chats'}
+            isOpen={isOpen}
+            badge={chatHistory.length > 0 ? chatHistory.length : null}
+          />
+
+          <SidebarItem
+            icon={FileText}
+            label="Documents"
+            onClick={() => {
+              if (onSectionChange) onSectionChange('documents');
+              onDocumentsClick();
+              if (isMobile) onToggle();
+            }}
+            active={activeSection === 'documents'}
+            isOpen={isOpen}
+          />
         </div>
-      </div>
+
+        {/* Bottom section */}
+        <div className="flex flex-col gap-1 p-2 border-t border-slate-700">
+          <SidebarItem
+            icon={Settings}
+            label="Settings"
+            onClick={() => {
+              if (onSectionChange) onSectionChange('settings');
+              onSettingsClick();
+              if (isMobile) onToggle();
+            }}
+            active={activeSection === 'settings'}
+            isOpen={isOpen}
+          />
+
+          <SidebarItem
+            icon={User}
+            label="Profile"
+            onClick={() => {
+              if (onSectionChange) onSectionChange('profile');
+              onProfileClick();
+              if (isMobile) onToggle();
+            }}
+            active={activeSection === 'profile'}
+            isOpen={isOpen}
+          />
+        </div>
+      </aside>
     </>
   );
 }
-

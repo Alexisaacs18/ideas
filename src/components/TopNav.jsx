@@ -1,19 +1,10 @@
-import { FileText, User, Menu } from 'lucide-react';
+import { FileText, User } from 'lucide-react';
 
-export default function TopNav({ onDocumentsClick, onProfileClick, onMenuClick }) {
+export default function TopNav({ onDocumentsClick, onProfileClick }) {
   return (
-    <nav className="glass border-b border-border/50 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+    <nav className="glass border-b border-border/50 h-12 px-5 flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <button
-          onClick={onMenuClick}
-          className="w-9 h-9 rounded-lg hover:bg-surface/50 flex items-center justify-center transition-colors lg:hidden"
-        >
-          <Menu size={20} className="text-text-secondary" />
-        </button>
-        <div className="w-8 h-8 rounded-lg gradient-accent flex items-center justify-center">
-          <span className="text-white font-bold text-sm">SB</span>
-        </div>
-        <h1 className="text-xl font-semibold text-text-primary">Second Brain</h1>
+        <h1 className="text-lg font-semibold text-text-primary">Second Brain</h1>
       </div>
       
       <div className="flex items-center gap-4">

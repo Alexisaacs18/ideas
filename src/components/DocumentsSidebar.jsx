@@ -34,7 +34,7 @@ export default function DocumentsSidebar({
         className="fixed inset-0 bg-black/50 z-40 transition-opacity"
         onClick={onClose}
       />
-      <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-surface border-l border-border/50 z-50 animate-slide-in overflow-y-auto">
+      <div className="fixed right-0 top-16 h-[calc(100vh-4rem)] w-full sm:w-96 bg-surface border-l border-border/50 z-40 animate-slide-in overflow-y-auto">
         <div className="p-6 border-b border-border/50">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-text-primary">My Documents</h2>

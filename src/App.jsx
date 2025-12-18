@@ -23,7 +23,12 @@ function App() {
   const [documents, setDocuments] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mainSidebarOpen, setMainSidebarOpen] = useState(false);
+  const [mainSidebarOpen, setMainSidebarOpen] = useState(() => {
+    // Default to closed (icon-only)
+    const stored = localStorage.getItem('sidebarOpen');
+    return stored ? JSON.parse(stored) : false;
+  });
+  const [activeSection, setActiveSection] = useState('chats');
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [chatHistory, setChatHistory] = useState(() => {
@@ -306,6 +311,11 @@ function App() {
     }
   };
 
+  // Save sidebar state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarOpen', JSON.stringify(mainSidebarOpen));
+  }, [mainSidebarOpen]);
+
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -319,7 +329,7 @@ function App() {
   }, [sidebarOpen]);
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-screen flex bg-background overflow-hidden">
       <Toaster
         position="top-center"
         toastOptions={{
@@ -344,37 +354,55 @@ function App() {
         }}
       />
 
-      <TopNav
-        onDocumentsClick={() => setSidebarOpen(true)}
-        onProfileClick={() => setMainSidebarOpen(true)}
-        onMenuClick={() => setMainSidebarOpen(true)}
-      />
-
-      <ChatArea messages={messages} isTyping={isTyping} />
-
-      <InputArea
-        onSend={handleSend}
-        onFileUpload={handleFileUpload}
-        uploadProgress={uploadProgress}
-        uploading={uploading}
-      />
-
+      {/* Main Sidebar - full height from top */}
       <MainSidebar
         isOpen={mainSidebarOpen}
-        onClose={() => setMainSidebarOpen(false)}
-        onNewChat={handleNewChat}
+        onToggle={() => setMainSidebarOpen(!mainSidebarOpen)}
         onDocumentsClick={() => {
-          setMainSidebarOpen(false);
+          setActiveSection('documents');
           setSidebarOpen(true);
         }}
-        onSettingsClick={handleSettingsClick}
-        onProfileClick={handleProfileClick}
+        onSettingsClick={() => {
+          setActiveSection('settings');
+          handleSettingsClick();
+        }}
+        onProfileClick={() => {
+          setActiveSection('profile');
+          handleProfileClick();
+        }}
         chatHistory={chatHistory}
-        onSelectChat={handleSelectChat}
-        onDeleteChat={handleDeleteChat}
-        currentChatId={currentChatId}
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
       />
 
+      {/* Main Content Area - next to sidebar */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Nav - only in main content area */}
+        <TopNav
+          onDocumentsClick={() => {
+            setActiveSection('documents');
+            setSidebarOpen(true);
+          }}
+          onProfileClick={() => {
+            setActiveSection('profile');
+            handleProfileClick();
+          }}
+        />
+
+        {/* Chat container */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <ChatArea messages={messages} isTyping={isTyping} />
+
+          <InputArea
+            onSend={handleSend}
+            onFileUpload={handleFileUpload}
+            uploadProgress={uploadProgress}
+            uploading={uploading}
+          />
+        </div>
+      </div>
+
+      {/* Documents Sidebar */}
       <DocumentsSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -383,7 +411,7 @@ function App() {
         onUpload={handleFileUpload}
         uploadProgress={uploadProgress}
       />
-    </div>
+      </div>
   );
 }
 
