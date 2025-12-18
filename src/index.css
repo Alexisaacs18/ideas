@@ -15,6 +15,24 @@
   * {
     @apply border-border;
   }
+
+  /* Light mode overrides */
+  :root:not(.dark) {
+    --background: #FFFFFF;
+    --surface: #F8F9FA;
+    --text-primary: #1F2937;
+    --text-secondary: #6B7280;
+    --border: #E5E7EB;
+  }
+
+  /* Dark mode (default) */
+  .dark {
+    --background: #0F172A;
+    --surface: #1E293B;
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --border: #334155;
+  }
 }
 
 @layer utilities {

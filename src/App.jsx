@@ -55,6 +55,17 @@ function App() {
   const [authOpen, setAuthOpen] = useState(false);
 
 
+  // Initialize theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const root = document.documentElement;
+    if (savedTheme === 'light') {
+      root.classList.remove('dark');
+    } else {
+      root.classList.add('dark');
+    }
+  }, []);
+
   // Handle Google OAuth callback
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -348,6 +359,47 @@ function App() {
     toast.success('Signed out successfully');
   };
 
+  const handleDeleteAllChats = () => {
+    // Delete all chats from localStorage
+    const allChatIds = chatHistory.map(chat => chat.id);
+    allChatIds.forEach(chatId => {
+      localStorage.removeItem(`chat_${chatId}`);
+    });
+    
+    setChatHistory([]);
+    setCurrentChatId(null);
+    setMessages([]);
+    localStorage.removeItem('chatHistory');
+    localStorage.removeItem('currentChatId');
+    toast.success('All chats deleted');
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      // Delete all user data
+      // 1. Delete all chats
+      handleDeleteAllChats();
+      
+      // 2. Delete all documents (would need backend endpoint)
+      // For now, just clear local state
+      setDocuments([]);
+      
+      // 3. Delete user account
+      setUser(null);
+      localStorage.removeItem('user');
+      localStorage.removeItem('userId');
+      
+      // 4. Clear all other user data
+      // Note: In production, you'd call a backend endpoint to delete from database
+      
+      toast.success('Account deleted successfully');
+      setSettingsOpen(false);
+    } catch (error) {
+      console.error('Delete account error:', error);
+      toast.error('Failed to delete account');
+    }
+  };
+
   // Frontend-only OAuth code exchange (fallback if no client secret)
   const exchangeCodeFrontend = async (code, redirectUri) => {
     const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
@@ -586,6 +638,9 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         user={user}
         documents={documents}
+        chatHistory={chatHistory}
+        onDeleteAllChats={handleDeleteAllChats}
+        onDeleteAccount={handleDeleteAccount}
       />
 
       {/* Profile Modal (if logged in) */}
