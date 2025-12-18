@@ -4,6 +4,7 @@
  */
 
 import { HfInference } from '@huggingface/inference';
+import { getDocument } from 'pdfjs-serverless';
 
 // CORS headers helper
 const corsHeaders = {
@@ -111,6 +112,66 @@ function cleanText(text) {
     .trim();
 }
 
+// Utility: Extract text from PDF using pdfjs-serverless
+async function extractTextFromPDF(arrayBuffer) {
+  try {
+    console.log('=== PDF EXTRACTION START ===');
+    console.log('Buffer size:', arrayBuffer.byteLength);
+    
+    // Load the PDF using pdfjs-serverless (works in Cloudflare Workers)
+    const pdf = await getDocument({
+      data: arrayBuffer,
+      useSystemFonts: true,
+    }).promise;
+    
+    console.log('PDF loaded, pages:', pdf.numPages);
+    
+    let fullText = '';
+    
+    // Extract text from each page
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      // Combine text items into a string
+      const pageText = textContent.items
+        .map(item => item.str)
+        .join(' ');
+      
+      fullText += pageText + '\n\n';
+      console.log(`Page ${pageNum} text length:`, pageText.length);
+      console.log(`Page ${pageNum} preview:`, pageText.substring(0, 200));
+    }
+    
+    console.log('=== FULL TEXT EXTRACTED ===');
+    console.log('Total length:', fullText.length);
+    console.log('First 500 chars:', fullText.substring(0, 500));
+    console.log('Contains "experience"?', fullText.toLowerCase().includes('experience'));
+    console.log('Contains "skills"?', fullText.toLowerCase().includes('skills'));
+    console.log('Contains "education"?', fullText.toLowerCase().includes('education'));
+    
+    // Validate extraction
+    if (fullText.length < 100) {
+      throw new Error('Extracted text too short - PDF may be scanned image');
+    }
+    
+    // Clean the text
+    const cleanedText = fullText
+      .replace(/\s+/g, ' ')  // Normalize whitespace
+      .replace(/[^\x20-\x7E\n]/g, '')  // Remove non-printable chars
+      .trim();
+    
+    console.log('Cleaned text length:', cleanedText.length);
+    console.log('Cleaned preview:', cleanedText.substring(0, 300));
+    
+    return cleanedText;
+    
+  } catch (error) {
+    console.error('PDF extraction error:', error);
+    throw new Error(`Failed to extract PDF text: ${error.message}`);
+  }
+}
+
 // Utility: Extract text from file (supports TXT and PDF)
 async function extractTextFromFile(file, filename) {
   const extension = filename.split('.').pop().toLowerCase();
@@ -131,140 +192,19 @@ async function extractTextFromFile(file, filename) {
     
     return cleanText(text);
   } else if (extension === 'pdf') {
-    try {
-      console.log('=== PDF EXTRACTION DEBUG ===');
-      const arrayBuffer = await file.arrayBuffer();
-      console.log('Buffer size:', arrayBuffer.byteLength);
-      
-      // Convert to Uint8Array for processing
-      const uint8Array = new Uint8Array(arrayBuffer);
-      
-      // Decode as Latin-1 to preserve byte values (PDFs use various encodings)
-      const decoder = new TextDecoder('latin1', { fatal: false });
-      const pdfString = decoder.decode(uint8Array);
-      
-      console.log('PDF string length:', pdfString.length);
-      
-      let extractedText = '';
-      const extractedStrings = new Set(); // Avoid duplicates
-      
-      // Method 1: Extract text from PDF text objects - parentheses format (most common)
-      // PDF text is often in format: (text here) Tj or (text here) '
-      const textObjectRegex = /\((?:[^()\\]|\\.|\\\d{1,3})*\)/g;
-      let match;
-      while ((match = textObjectRegex.exec(pdfString)) !== null) {
-        let textStr = match[0].slice(1, -1); // Remove parentheses
-        
-        // Decode PDF escape sequences
-        textStr = textStr
-          .replace(/\\([nrtbf()\\])/g, (m, char) => {
-            const escapes = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '(': '(', ')': ')', '\\': '\\' };
-            return escapes[char] || m;
-          })
-          .replace(/\\(\d{1,3})/g, (m, octal) => {
-            const code = parseInt(octal, 8);
-            return code >= 32 && code <= 126 ? String.fromCharCode(code) : '';
-          })
-          .replace(/\\x([0-9A-Fa-f]{2})/g, (m, hex) => {
-            const code = parseInt(hex, 16);
-            return code >= 32 && code <= 126 ? String.fromCharCode(code) : '';
-          });
-        
-        // Only add if it looks like real text (has letters and reasonable length)
-        if (textStr.length >= 2 && /[a-zA-Z]/.test(textStr) && isValidText(textStr)) {
-          const normalized = textStr.trim();
-          if (normalized.length > 0 && !extractedStrings.has(normalized)) {
-            extractedStrings.add(normalized);
-            extractedText += normalized + ' ';
-          }
-        }
-      }
-      
-      // Method 2: Extract from hex strings <hexdata>
-      const hexStringRegex = /<([0-9A-Fa-f\s]+)>/g;
-      while ((match = hexStringRegex.exec(pdfString)) !== null) {
-        const hexStr = match[1].replace(/\s/g, '');
-        if (hexStr.length >= 4 && hexStr.length % 2 === 0) {
-          let decoded = '';
-          for (let i = 0; i < hexStr.length; i += 2) {
-            const byte = parseInt(hexStr.substr(i, 2), 16);
-            // Only include printable ASCII
-            if (byte >= 32 && byte <= 126) {
-              decoded += String.fromCharCode(byte);
-            }
-          }
-          
-          if (decoded.length >= 2 && /[a-zA-Z]/.test(decoded) && isValidText(decoded)) {
-            const normalized = decoded.trim();
-            if (normalized.length > 0 && !extractedStrings.has(normalized)) {
-              extractedStrings.add(normalized);
-              extractedText += normalized + ' ';
-            }
-          }
-        }
-      }
-      
-      // Method 3: Extract from stream objects (for embedded text)
-      if (extractedText.length < 200) {
-        const streamRegex = /stream[\s\S]{0,50000}?endstream/g;
-        const streamMatches = pdfString.match(streamRegex) || [];
-        
-        for (const streamMatch of streamMatches) {
-          const streamContent = streamMatch.replace(/stream|endstream/g, '');
-          
-          // Look for text patterns in streams
-          const textPattern = /[A-Za-z]{3,20}/g;
-          const words = streamContent.match(textPattern);
-          
-          if (words && words.length > 5) {
-            // Check if words form coherent text
-            const sample = words.slice(0, 20).join(' ');
-            if (isValidText(sample) && /[aeiouAEIOU]/.test(sample)) {
-              extractedText += words.join(' ') + ' ';
-            }
-          }
-        }
-      }
-      
-      console.log('Extracted text length:', extractedText.length);
-      console.log('First 500 chars:', extractedText.substring(0, 500));
-      
-      if (extractedText.length === 0) {
-        throw new Error('PDF text extraction returned no text. The PDF may be image-based, encrypted, or have no extractable text.');
-      }
-      
-      // Validate the text is readable
-      // Check if text contains actual common words (not binary garbage)
-      const commonWords = /\b(the|and|is|was|for|with|at|from|to|a|an|in|on|of|as|be|or|by|this|that|have|has|had|will|would|should|could|may|might|can|must|shall|are|were|been|being|been|has|have|had|do|does|did|will|would|should|could|may|might|can|must|shall)\b/i;
-      const hasRealWords = commonWords.test(extractedText);
-      const printableChars = extractedText.match(/[a-zA-Z0-9\s.,!?;:'"()-]/g)?.length || 0;
-      const hasMostlyPrintable = printableChars / extractedText.length > 0.5;
-      
-      console.log('Has real words:', hasRealWords);
-      console.log('Mostly printable:', hasMostlyPrintable);
-      console.log('Printable ratio:', (printableChars / extractedText.length).toFixed(3));
-      
-      if (!hasRealWords || !hasMostlyPrintable) {
-        throw new Error('PDF text extraction failed - extracted text appears to be corrupted or contains binary data. The PDF may be image-based or encrypted.');
-      }
-      
-      // Clean the text
-      const cleanedText = cleanText(extractedText);
-      console.log('Cleaned text length:', cleanedText.length);
-      console.log('Cleaned text preview (first 300):', cleanedText.substring(0, 300));
-      if (cleanedText.length > 600) {
-        console.log('Cleaned text preview (middle):', cleanedText.substring(cleanedText.length / 2, cleanedText.length / 2 + 200));
-      }
-      
-      if (cleanedText.length < 50) {
-        throw new Error('PDF extraction returned too little text. The PDF may be image-based or have no extractable text.');
-      }
-      
-      return cleanedText;
-    } catch (error) {
-      console.error('PDF extraction error:', error);
-      throw new Error(`PDF extraction failed: ${error.message}`);
-    }
+    const arrayBuffer = await file.arrayBuffer();
+    const extractedText = await extractTextFromPDF(arrayBuffer);
+    
+    // Additional validation after extraction
+    console.log('=== TEXT VALIDATION ===');
+    console.log('Extracted text starts with:', extractedText.substring(0, 100));
+    console.log('Text contains resume keywords?', 
+      extractedText.toLowerCase().includes('experience') ||
+      extractedText.toLowerCase().includes('education') ||
+      extractedText.toLowerCase().includes('skills')
+    );
+    
+    return extractedText;
   } else {
     throw new Error(`Unsupported file type: ${extension}`);
   }
@@ -555,8 +495,36 @@ async function handleUpload(request, env) {
       );
     }
     
+    // After extracting text, before chunking - extensive logging
+    console.log('=== TEXT VALIDATION ===');
+    console.log('Extracted text length:', text.length);
+    console.log('Extracted text starts with:', text.substring(0, 100));
+    console.log('Extracted text ends with:', text.substring(Math.max(0, text.length - 100)));
+    console.log('Text contains resume keywords?', {
+      experience: text.toLowerCase().includes('experience'),
+      education: text.toLowerCase().includes('education'),
+      skills: text.toLowerCase().includes('skills'),
+      work: text.toLowerCase().includes('work'),
+      job: text.toLowerCase().includes('job'),
+      resume: text.toLowerCase().includes('resume')
+    });
+    console.log('Text sample (chars 500-800):', text.substring(500, 800));
+    
     // Chunk text
-    const chunks = chunkText(text);
+    const chunks = chunkText(text, 1500, 100);
+    
+    // Log first chunk being created
+    console.log('=== CHUNKING RESULT ===');
+    console.log('Number of chunks:', chunks.length);
+    if (chunks.length > 0) {
+      console.log('First chunk length:', chunks[0].length);
+      console.log('First chunk (first 200 chars):', chunks[0].substring(0, 200));
+      console.log('First chunk (last 200 chars):', chunks[0].substring(Math.max(0, chunks[0].length - 200)));
+      if (chunks.length > 1) {
+        console.log('Second chunk length:', chunks[1].length);
+        console.log('Second chunk (first 200 chars):', chunks[1].substring(0, 200));
+      }
+    }
     
     if (chunks.length === 0) {
       return new Response(
