@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Mail, Lock, User as UserIcon, Chrome, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Mail, Lock, User as UserIcon, Loader2 } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'react-hot-toast';
 
@@ -10,34 +10,6 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [oauthClientId, setOauthClientId] = useState(null);
-
-  // Load OAuth Client ID on mount
-  useEffect(() => {
-    if (isOpen) {
-      loadOAuthClientId();
-    }
-  }, [isOpen]);
-
-  const loadOAuthClientId = async () => {
-    // Try to get Client ID from environment variable first (for local dev)
-    let clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
-    
-    // If not set, try to fetch from backend API (for production)
-    if (!clientId || clientId === 'your-google-oauth-client-id-here') {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev'}/api/config/oauth-client-id`);
-        if (response.ok) {
-          const data = await response.json();
-          clientId = data.clientId;
-        }
-      } catch (err) {
-        console.error('Failed to load OAuth Client ID from backend:', err);
-      }
-    }
-    
-    setOauthClientId(clientId);
-  };
 
   // Reset form when switching between sign-in and sign-up
   const handleModeSwitch = (newMode) => {
@@ -47,10 +19,6 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
     setName('');
     setError('');
   };
-
-  // Check if Google OAuth is configured
-  const googleOAuthEnabled = (oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID) && 
-                              (oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID) !== 'your-google-oauth-client-id-here';
 
   if (!isOpen) return null;
 
@@ -113,68 +81,6 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
     }
   };
 
-  const handleGoogleAuth = async () => {
-    // Use the loaded Client ID (from env var or API)
-    const clientId = oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
-    
-    // === COMPREHENSIVE DEBUG LOGGING ===
-    console.log('=== OAUTH DEBUG: handleGoogleAuth (Main Auth) ===');
-    console.log('Client ID:', clientId ? `${clientId.substring(0, 20)}...` : 'NOT SET');
-    console.log('Current URL:', window.location.href);
-    console.log('Origin:', window.location.origin);
-    console.log('Pathname:', window.location.pathname);
-    console.log('Environment:', import.meta.env.MODE);
-    
-    if (!clientId || clientId === 'your-google-oauth-client-id-here') {
-      console.error('❌ OAuth Client ID not configured');
-      toast.error('Google OAuth not configured');
-      return;
-    }
-
-    // Google OAuth configuration
-    // Ensure no trailing slash and exact match with Google OAuth settings
-    const redirectUri = window.location.origin.replace(/\/$/, '');
-    const scope = 'openid email profile';
-    const responseType = 'code';
-    
-    // === DETAILED LOGGING ===
-    console.log('=== OAUTH REQUEST DETAILS ===');
-    console.log('Origin (cleaned):', redirectUri);
-    console.log('Redirect URI:', redirectUri);
-    console.log('Scope:', scope);
-    console.log('Client ID (first 20 chars):', clientId.substring(0, 20) + '...');
-    
-    const authParams = {
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      response_type: responseType,
-      scope: scope,
-      access_type: 'offline',
-      prompt: 'consent',
-    };
-    
-    console.log('OAuth Parameters:', authParams);
-    
-    // Build Google OAuth URL
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(authParams)}`;
-    
-    console.log('=== FULL OAUTH URL ===');
-    console.log('URL (first 200 chars):', authUrl.substring(0, 200) + '...');
-    console.log('Full URL:', authUrl);
-    console.log('=== END OAUTH DEBUG ===');
-    console.log('');
-    console.log('📋 INSTRUCTIONS:');
-    console.log('1. Copy the Redirect URI above');
-    console.log('2. Go to Google Cloud Console → APIs & Services → Credentials');
-    console.log('3. Click on your OAuth 2.0 Client ID');
-    console.log('4. Add the Redirect URI to "Authorized redirect URIs"');
-    console.log('5. Make sure it matches EXACTLY (no trailing slash)');
-    console.log('');
-
-    // Redirect to Google OAuth
-    console.log('Redirecting to Google OAuth...');
-    window.location.href = authUrl;
-  };
 
   return (
     <div 
@@ -288,26 +194,6 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
               isSignUp ? 'Sign Up' : 'Sign In'
             )}
           </button>
-
-          {googleOAuthEnabled && (
-            <>
-              <div className="flex items-center gap-4 text-slate-400 text-xs my-2">
-                <div className="flex-1 h-px bg-slate-700"></div>
-                <span>or</span>
-                <div className="flex-1 h-px bg-slate-700"></div>
-              </div>
-
-              <button
-                type="button"
-                className="w-full py-3 rounded-lg bg-transparent border border-slate-700 text-slate-100 text-sm font-medium cursor-pointer transition-all hover:bg-slate-800 flex items-center justify-center gap-2"
-                onClick={handleGoogleAuth}
-              >
-                <Chrome size={18} />
-                Continue with Google
-              </button>
-            </>
-          )}
-
         </form>
       </div>
     </div>

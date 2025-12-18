@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Chrome, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield } from 'lucide-react';
-import { api } from '../utils/api';
+import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-const ADMIN_EMAIL = 'alexisaacs18@gmail.com';
+const ADMIN_PASSWORD = 'S3ahawk-1845!';
 
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -11,39 +10,8 @@ export default function Admin() {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
-  const [oauthClientId, setOauthClientId] = useState(null);
-
-  // Debug: Log when Admin component mounts
-  useEffect(() => {
-    console.log('=== ADMIN OAUTH DEBUG ===');
-    console.log('Admin component mounted at path:', window.location.pathname);
-    console.log('Current URL:', window.location.href);
-    console.log('Origin:', window.location.origin);
-    console.log('Environment:', import.meta.env.MODE);
-    console.log('Client ID from env:', import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID ? 'Set' : 'Not set');
-    loadOAuthClientId();
-  }, []);
-
-  const loadOAuthClientId = async () => {
-    // Try to get Client ID from environment variable first (for local dev)
-    let clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
-    
-    // If not set, try to fetch from backend API (for production)
-    if (!clientId || clientId === 'your-google-oauth-client-id-here') {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev'}/api/config/oauth-client-id`);
-        if (response.ok) {
-          const data = await response.json();
-          clientId = data.clientId;
-        }
-      } catch (err) {
-        console.error('Failed to load OAuth Client ID from backend:', err);
-      }
-    }
-    
-    setOauthClientId(clientId);
-    console.log('Google OAuth Client ID:', clientId ? 'Set' : 'Not set');
-  };
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   // Check authentication on mount
   useEffect(() => {
@@ -86,123 +54,36 @@ export default function Admin() {
     }
   };
 
-  const handleGoogleAuth = async () => {
-    // Use the loaded Client ID (from env var or API)
-    const clientId = oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
     
-    // === COMPREHENSIVE DEBUG LOGGING ===
-    console.log('=== OAUTH DEBUG: handleGoogleAuth called ===');
-    console.log('Client ID:', clientId ? `${clientId.substring(0, 20)}...` : 'NOT SET');
-    console.log('Current URL:', window.location.href);
-    console.log('Origin:', window.location.origin);
-    console.log('Pathname:', window.location.pathname);
-    console.log('Environment:', import.meta.env.MODE);
-    
-    if (!clientId || clientId === 'your-google-oauth-client-id-here') {
-      console.error('❌ OAuth Client ID not configured');
-      toast.error('Google OAuth not configured. Please set GOOGLE_OAUTH_CLIENT_ID in Cloudflare secrets.');
+    if (!password.trim()) {
+      setError('Password is required');
       return;
     }
 
     setIsAuthLoading(true);
 
     try {
-      // Google OAuth configuration
-      // Use the current origin + /admin as redirect URI
-      // Ensure no trailing slash on origin
-      const origin = window.location.origin.replace(/\/$/, '');
-      const redirectUri = `${origin}/admin`;
-      const scope = 'openid email profile';
-      
-      // === DETAILED LOGGING ===
-      console.log('=== OAUTH REQUEST DETAILS ===');
-      console.log('Origin (cleaned):', origin);
-      console.log('Redirect URI:', redirectUri);
-      console.log('Scope:', scope);
-      console.log('Client ID (first 20 chars):', clientId.substring(0, 20) + '...');
-      
-      const authParams = {
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: 'code',
-        scope: scope,
-        access_type: 'offline',
-        prompt: 'consent',
-      };
-      
-      console.log('OAuth Parameters:', authParams);
-      
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(authParams)}`;
-      
-      console.log('=== FULL OAUTH URL ===');
-      console.log('URL (first 200 chars):', authUrl.substring(0, 200) + '...');
-      console.log('Full URL:', authUrl);
-      console.log('=== END OAUTH DEBUG ===');
-      console.log('');
-      console.log('📋 INSTRUCTIONS:');
-      console.log('1. Copy the Redirect URI above');
-      console.log('2. Go to Google Cloud Console → APIs & Services → Credentials');
-      console.log('3. Click on your OAuth 2.0 Client ID');
-      console.log('4. Add the Redirect URI to "Authorized redirect URIs"');
-      console.log('5. Make sure it matches EXACTLY (including /admin path)');
-      console.log('');
-
-      // Handle OAuth callback
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      const error = urlParams.get('error');
-
-      if (error) {
-        console.error('=== OAUTH ERROR ===');
-        console.error('Error code:', error);
-        console.error('Error description:', urlParams.get('error_description'));
-        console.error('Current URL:', window.location.href);
-        toast.error(`OAuth error: ${error}`);
-        window.history.replaceState({}, document.title, '/admin');
-        setIsAuthLoading(false);
-        return;
+      // Check password
+      if (password === ADMIN_PASSWORD) {
+        // Store admin session
+        localStorage.setItem('admin_session', JSON.stringify({
+          timestamp: Date.now(),
+        }));
+        setIsAuthenticated(true);
+        setPassword('');
+        toast.success('Admin access granted');
+      } else {
+        setError('Incorrect password');
+        toast.error('Incorrect password');
       }
-
-      if (code) {
-        console.log('=== OAUTH CALLBACK ===');
-        console.log('Received authorization code');
-        console.log('Redirect URI used:', redirectUri);
-        
-        // Exchange code for token and verify email
-        // Pass is_admin flag to backend
-        const result = await api.oauthCallback(code, redirectUri, null, true);
-        
-        console.log('OAuth callback result:', result);
-        
-        // Verify email is admin email (backend should have already checked, but double-check)
-        if (result.email && result.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-          // Store admin session
-          localStorage.setItem('admin_session', JSON.stringify({
-            email: result.email,
-            timestamp: Date.now(),
-          }));
-          setIsAuthenticated(true);
-          toast.success('Admin access granted');
-          // Clean URL
-          window.history.replaceState({}, document.title, '/admin');
-        } else {
-          console.error('Access denied - email mismatch:', result.email);
-          toast.error('Access denied. Only authorized administrators can access this page.');
-          setIsAuthenticated(false);
-        }
-        setIsAuthLoading(false);
-        return;
-      }
-
-      // Redirect to Google OAuth
-      console.log('Redirecting to Google OAuth...');
-      window.location.href = authUrl;
     } catch (err) {
-      console.error('=== OAUTH EXCEPTION ===');
-      console.error('Error:', err);
-      console.error('Error message:', err.message);
-      console.error('Error stack:', err.stack);
-      toast.error(err.message || 'Authentication failed');
+      console.error('Auth error:', err);
+      toast.error('Authentication failed');
+      setError('Authentication failed');
+    } finally {
       setIsAuthLoading(false);
     }
   };
@@ -237,17 +118,6 @@ export default function Admin() {
     }
   };
 
-  // Use the loaded Client ID (from env var or API)
-  const clientId = oauthClientId || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
-  const hasGoogleOAuth = clientId && clientId !== 'your-google-oauth-client-id-here';
-  
-  console.log('Admin render state:', {
-    isLoading,
-    isAuthenticated,
-    hasGoogleOAuth,
-    clientId: clientId ? 'Set' : 'Not set',
-    oauthClientId: oauthClientId ? 'Loaded from API' : 'Not loaded'
-  });
 
   if (isLoading) {
     return (
@@ -267,25 +137,36 @@ export default function Admin() {
           <div className="text-center mb-8">
             <Shield className="w-16 h-16 mx-auto mb-4 text-indigo-500" />
             <h1 className="text-2xl font-bold text-text-primary mb-2">Admin Dashboard</h1>
-            <p className="text-text-secondary mb-4">Sign in with Google to access admin features</p>
-            {!hasGoogleOAuth && (
-              <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mt-4 text-left">
-                <p className="font-medium mb-1">⚠️ Google OAuth not configured</p>
-                <p className="text-amber-300/80 mb-2">
-                  Please set VITE_GOOGLE_OAUTH_CLIENT_ID in your .env file to enable authentication.
-                </p>
-                <p className="text-amber-300/60 text-[10px] mt-2">
-                  Create a .env file in the project root with: VITE_GOOGLE_OAUTH_CLIENT_ID=your-client-id-here
-                </p>
-              </div>
-            )}
+            <p className="text-text-secondary mb-4">Enter password to access admin features</p>
           </div>
           
-          {hasGoogleOAuth ? (
+          <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
+            {error && (
+              <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-sm text-red-400">{error}</p>
+              </div>
+            )}
+            
+            <div className="flex items-center gap-3 px-4 py-3 bg-background/50 border border-border/50 rounded-lg focus-within:border-indigo-500/50 transition-colors">
+              <Lock size={18} className="text-text-secondary flex-shrink-0" />
+              <input
+                type="password"
+                placeholder="Admin Password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError('');
+                }}
+                disabled={isAuthLoading}
+                className="flex-1 bg-transparent border-none outline-none text-text-primary text-sm placeholder:text-text-secondary"
+                autoFocus
+              />
+            </div>
+
             <button
-              onClick={handleGoogleAuth}
-              disabled={isAuthLoading}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white hover:bg-gray-50 text-gray-900 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 shadow-sm"
+              type="submit"
+              disabled={isAuthLoading || !password.trim()}
+              className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isAuthLoading ? (
                 <>
@@ -294,21 +175,12 @@ export default function Admin() {
                 </>
               ) : (
                 <>
-                  <Chrome className="w-5 h-5" />
-                  <span>Continue with Google</span>
+                  <Lock className="w-5 h-5" />
+                  <span>Sign In</span>
                 </>
               )}
             </button>
-          ) : (
-            <div className="text-center p-4 bg-background/50 rounded-lg border border-border/30">
-              <p className="text-sm text-text-secondary mb-2">
-                Google OAuth is required to access the admin dashboard.
-              </p>
-              <p className="text-xs text-text-secondary/60">
-                Please configure VITE_GOOGLE_OAUTH_CLIENT_ID in your .env file.
-              </p>
-            </div>
-          )}
+          </form>
         </div>
       </div>
     );
