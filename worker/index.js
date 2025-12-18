@@ -1327,7 +1327,7 @@ async function handleChat(request, env) {
     if (!allEmbeddings.results || allEmbeddings.results.length === 0) {
       return new Response(
         JSON.stringify({
-          answer: 'No documents found. Please upload documents first.',
+          answer: "You haven't uploaded any documents yet. I'm your second brain and digital garden, so you can store PDFs, CSVs, and other types of documents, and I can recall anything you need no matter how much you store. Please upload some documents to get started!",
           sources: [],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }

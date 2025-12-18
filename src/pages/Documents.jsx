@@ -495,8 +495,10 @@ export default function Documents() {
           {documents.length === 0 ? (
             <div className="text-center py-20">
               <FileText size={64} className="mx-auto mb-6 opacity-50 text-text-secondary" />
-              <h2 className="text-xl font-semibold text-text-primary mb-2">No documents yet</h2>
-              <p className="text-text-secondary mb-6">Upload your first document to get started</p>
+              <h2 className="text-xl font-semibold text-text-primary mb-4">You haven't uploaded any documents</h2>
+              <p className="text-text-secondary mb-6 max-w-2xl mx-auto leading-relaxed">
+                I'm your second brain and digital garden, so you can store PDFs, CSVs, and other types of documents, and I can recall anything you need no matter how much you store.
+              </p>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="flex items-center gap-2 px-6 py-3 rounded-lg gradient-accent text-white hover:opacity-90 transition-opacity mx-auto"

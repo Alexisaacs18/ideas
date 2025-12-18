@@ -287,8 +287,10 @@ Examples:
           {documents.length === 0 ? (
             <div className="text-center py-12 text-text-secondary">
               <FileText size={48} className="mx-auto mb-4 opacity-50" />
-              <p className="text-sm">No documents yet</p>
-              <p className="text-xs mt-2">Add your first document to get started</p>
+              <p className="text-sm mb-2">You haven't uploaded any documents</p>
+              <p className="text-xs leading-relaxed">
+                I'm your second brain and digital garden, so you can store PDFs, CSVs, and other types of documents, and I can recall anything you need no matter how much you store.
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
