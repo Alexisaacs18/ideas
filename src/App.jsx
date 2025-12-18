@@ -4,6 +4,7 @@ import TopNav from './components/TopNav';
 import ChatArea from './components/ChatArea';
 import InputArea from './components/InputArea';
 import DocumentsSidebar from './components/DocumentsSidebar';
+import MainSidebar from './components/MainSidebar';
 import { api } from './utils/api';
 
 function App() {
@@ -22,13 +23,33 @@ function App() {
   const [documents, setDocuments] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mainSidebarOpen, setMainSidebarOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [chatHistory, setChatHistory] = useState(() => {
+    // Load chat history from localStorage
+    const stored = localStorage.getItem('chatHistory');
+    return stored ? JSON.parse(stored) : [];
+  });
+  const [currentChatId, setCurrentChatId] = useState(() => {
+    // Get current chat ID from localStorage
+    return localStorage.getItem('currentChatId') || null;
+  });
 
-  // Register user and load documents on mount
+
+  // Load current chat messages on mount
   useEffect(() => {
-    registerUser();
-  }, [userId]);
+    if (currentChatId) {
+      const chatData = localStorage.getItem(`chat_${currentChatId}`);
+      if (chatData) {
+        try {
+          setMessages(JSON.parse(chatData));
+        } catch (error) {
+          console.error('Failed to load chat messages:', error);
+        }
+      }
+    }
+  }, [currentChatId]);
 
   const registerUser = async () => {
     try {
@@ -66,6 +87,25 @@ function App() {
   const handleSend = async (text) => {
     if (!text.trim()) return;
 
+    // Create new chat if none exists
+    if (!currentChatId) {
+      const newChatId = crypto.randomUUID();
+      const newChat = {
+        id: newChatId,
+        title: text.substring(0, 50),
+        timestamp: new Date().toISOString(),
+        lastMessage: null,
+      };
+      
+      setChatHistory(prev => {
+        const updated = [newChat, ...prev];
+        localStorage.setItem('chatHistory', JSON.stringify(updated));
+        return updated;
+      });
+      setCurrentChatId(newChatId);
+      localStorage.setItem('currentChatId', newChatId);
+    }
+
     // Add user message immediately
     const userMessage = {
       id: crypto.randomUUID(),
@@ -87,7 +127,29 @@ function App() {
         timestamp: Date.now(),
       };
       
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => {
+        const updated = [...prev, assistantMessage];
+        // Save to localStorage
+        if (currentChatId) {
+          localStorage.setItem(`chat_${currentChatId}`, JSON.stringify(updated));
+          
+          // Update chat history
+          setChatHistory(prevHistory => {
+            const updatedHistory = prevHistory.map(chat => 
+              chat.id === currentChatId 
+                ? { 
+                    ...chat, 
+                    title: text.substring(0, 50),
+                    lastMessage: assistantMessage.content.substring(0, 60)
+                  }
+                : chat
+            );
+            localStorage.setItem('chatHistory', JSON.stringify(updatedHistory));
+            return updatedHistory;
+          });
+        }
+        return updated;
+      });
     } catch (error) {
       toast.error(error.message || 'Failed to get response');
       console.error('Chat error:', error);
@@ -182,6 +244,68 @@ function App() {
     toast('Profile settings coming soon!', { icon: '👤' });
   };
 
+  const handleSettingsClick = () => {
+    toast('Settings coming soon!', { icon: '⚙️' });
+  };
+
+  const handleNewChat = () => {
+    // Create new chat
+    const newChatId = crypto.randomUUID();
+    const newChat = {
+      id: newChatId,
+      title: 'New Chat',
+      timestamp: new Date().toISOString(),
+      lastMessage: null,
+    };
+    
+    setChatHistory(prev => {
+      const updated = [newChat, ...prev];
+      localStorage.setItem('chatHistory', JSON.stringify(updated));
+      return updated;
+    });
+    setCurrentChatId(newChatId);
+    setMessages([]);
+    localStorage.setItem('currentChatId', newChatId);
+    setMainSidebarOpen(false);
+  };
+
+  const handleSelectChat = (chatId) => {
+    setCurrentChatId(chatId);
+    localStorage.setItem('currentChatId', chatId);
+    
+    // Load messages for this chat (from localStorage for now)
+    const chatData = localStorage.getItem(`chat_${chatId}`);
+    if (chatData) {
+      try {
+        setMessages(JSON.parse(chatData));
+      } catch (error) {
+        console.error('Failed to load chat messages:', error);
+        setMessages([]);
+      }
+    } else {
+      setMessages([]);
+    }
+    
+    setMainSidebarOpen(false);
+  };
+
+  const handleDeleteChat = (chatId) => {
+    if (confirm('Are you sure you want to delete this chat?')) {
+      setChatHistory(prev => {
+        const updated = prev.filter(chat => chat.id !== chatId);
+        localStorage.setItem('chatHistory', JSON.stringify(updated));
+        return updated;
+      });
+      localStorage.removeItem(`chat_${chatId}`);
+      
+      if (currentChatId === chatId) {
+        setCurrentChatId(null);
+        setMessages([]);
+        localStorage.removeItem('currentChatId');
+      }
+    }
+  };
+
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -222,7 +346,8 @@ function App() {
 
       <TopNav
         onDocumentsClick={() => setSidebarOpen(true)}
-        onProfileClick={handleProfileClick}
+        onProfileClick={() => setMainSidebarOpen(true)}
+        onMenuClick={() => setMainSidebarOpen(true)}
       />
 
       <ChatArea messages={messages} isTyping={isTyping} />
@@ -232,6 +357,22 @@ function App() {
         onFileUpload={handleFileUpload}
         uploadProgress={uploadProgress}
         uploading={uploading}
+      />
+
+      <MainSidebar
+        isOpen={mainSidebarOpen}
+        onClose={() => setMainSidebarOpen(false)}
+        onNewChat={handleNewChat}
+        onDocumentsClick={() => {
+          setMainSidebarOpen(false);
+          setSidebarOpen(true);
+        }}
+        onSettingsClick={handleSettingsClick}
+        onProfileClick={handleProfileClick}
+        chatHistory={chatHistory}
+        onSelectChat={handleSelectChat}
+        onDeleteChat={handleDeleteChat}
+        currentChatId={currentChatId}
       />
 
       <DocumentsSidebar
