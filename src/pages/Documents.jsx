@@ -316,38 +316,38 @@ export default function Documents() {
             </div>
           
             {/* Tabs */}
-            <div className="flex gap-1 mb-4 border-b border-border/50">
+            <div className="flex gap-1 mb-4 border-b border-border/50 overflow-x-auto">
               <button
-                className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                className={`px-3 sm:px-4 py-2.5 rounded-t-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ${
                   activeTab === 'upload'
                     ? 'bg-surface text-text-primary border-t border-l border-r border-border/50'
                     : 'text-text-secondary hover:text-text-primary hover:bg-background/30'
                 }`}
                 onClick={() => setActiveTab('upload')}
               >
-                <Upload size={16} />
+                <Upload size={14} className="sm:w-4 sm:h-4" />
                 <span>Upload</span>
               </button>
               <button
-                className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                className={`px-3 sm:px-4 py-2.5 rounded-t-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ${
                   activeTab === 'link'
                     ? 'bg-surface text-text-primary border-t border-l border-r border-border/50'
                     : 'text-text-secondary hover:text-text-primary hover:bg-background/30'
                 }`}
                 onClick={() => setActiveTab('link')}
               >
-                <LinkIcon size={16} />
+                <LinkIcon size={14} className="sm:w-4 sm:h-4" />
                 <span>Link</span>
               </button>
               <button
-                className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                className={`px-3 sm:px-4 py-2.5 rounded-t-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ${
                   activeTab === 'text'
                     ? 'bg-surface text-text-primary border-t border-l border-r border-border/50'
                     : 'text-text-secondary hover:text-text-primary hover:bg-background/30'
                 }`}
                 onClick={() => setActiveTab('text')}
               >
-                <FileText size={16} />
+                <FileText size={14} className="sm:w-4 sm:h-4" />
                 <span>Text</span>
               </button>
             </div>
@@ -476,7 +476,7 @@ export default function Documents() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
           {uploadProgress !== null && (
             <div className="mb-6 p-4 bg-surface border border-border/50 rounded-lg">
               <div className="flex items-center justify-between mb-2">

@@ -631,7 +631,7 @@ export default function Home() {
   }, [mainSidebarOpen]);
 
   return (
-    <div className="h-screen flex bg-background overflow-hidden">
+    <div className="h-screen flex bg-background overflow-hidden relative">
       <Toaster
         position="top-center"
         toastOptions={{
@@ -686,7 +686,7 @@ export default function Home() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full sm:w-auto">
         <TopNav
           onDocumentsClick={() => setSidebarOpen(true)}
           onProfileClick={handleProfileClick}

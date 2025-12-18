@@ -88,14 +88,15 @@ export default function DocumentsSidebar({
         className="fixed inset-0 bg-black/50 z-40 transition-opacity"
         onClick={onClose}
       />
-      <div className="fixed right-0 top-16 h-[calc(100vh-4rem)] w-full sm:w-96 bg-surface border-l border-border/50 z-40 animate-slide-in overflow-y-auto flex flex-col">
+      <div className="fixed right-0 top-0 sm:top-16 h-screen sm:h-[calc(100vh-4rem)] w-full sm:w-96 bg-surface border-l border-border/50 z-50 animate-slide-in overflow-y-auto flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b border-border/50">
+        <div className="p-4 sm:p-6 border-b border-border/50 flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-text-primary">Add Content</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-text-primary">Add Content</h2>
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-background/50 transition-colors text-text-secondary hover:text-text-primary"
+              aria-label="Close"
             >
               <X size={20} />
             </button>
@@ -140,7 +141,7 @@ export default function DocumentsSidebar({
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Upload Tab */}
           {activeTab === 'upload' && (
             <div>

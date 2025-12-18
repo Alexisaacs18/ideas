@@ -75,14 +75,18 @@ export default function MainSidebar({
   }, [isOpen, isMobile, onToggle]);
 
   // Sidebar width - 48px collapsed, 240px expanded
-  const sidebarWidth = isOpen ? 'w-60' : 'w-12';
+  // On mobile, always full width when open
+  const sidebarWidth = isMobile 
+    ? (isOpen ? 'w-64' : 'w-12') 
+    : (isOpen ? 'w-60' : 'w-12');
   const sidebarClasses = `
     h-screen
     bg-slate-900 border-r border-slate-700
     flex flex-col
     transition-all duration-200 ease-in-out
     ${sidebarWidth}
-    ${isMobile && isOpen ? 'shadow-2xl fixed left-0 top-0 z-40' : ''}
+    ${isMobile && isOpen ? 'shadow-2xl fixed left-0 top-0 z-50' : ''}
+    ${isMobile && !isOpen ? 'relative' : ''}
   `;
 
   const handleNewChat = () => {
@@ -120,7 +124,7 @@ export default function MainSidebar({
       {/* Mobile overlay */}
       {isMobile && isOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-20"
+          className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
           onClick={onToggle}
         />
       )}

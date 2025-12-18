@@ -56,3 +56,23 @@ div[id^="react-hot-toast"] {
 div[id^="react-hot-toast"] > div {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
 }
+
+/* Mobile-specific improvements */
+@media (max-width: 640px) {
+  /* Prevent horizontal scroll */
+  body {
+    overflow-x: hidden;
+  }
+  
+  /* Better touch targets */
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Improve text readability on mobile */
+  p, span {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+}

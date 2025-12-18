@@ -14,15 +14,15 @@ export default function ChatArea({ messages, isTyping }) {
   }, [messages, isTyping]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-8">
+    <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-8">
       <div className="max-w-4xl mx-auto">
         {messages.length === 0 && !isTyping ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <h2 className="text-3xl font-semibold text-text-primary mb-2">
+          <div className="flex items-center justify-center h-full min-h-[60vh]">
+            <div className="text-center px-4">
+              <h2 className="text-2xl sm:text-3xl font-semibold text-text-primary mb-2">
                 Welcome to Prosey
               </h2>
-              <p className="text-text-secondary mb-8">
+              <p className="text-sm sm:text-base text-text-secondary mb-8">
                 Upload documents and ask questions
               </p>
             </div>
