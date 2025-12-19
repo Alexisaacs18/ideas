@@ -8,11 +8,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0F172A',
-        surface: '#1E293B',
-        'text-primary': '#F1F5F9',
-        'text-secondary': '#94A3B8',
-        border: '#334155',
+        background: '#1E293B',
+        surface: '#334155',
+        'text-primary': '#E2E8F0',
+        'text-secondary': '#64748B',
+        border: '#475569',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in',

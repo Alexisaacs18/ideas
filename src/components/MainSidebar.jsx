@@ -81,7 +81,7 @@ export default function MainSidebar({
     : (isOpen ? 'w-60' : 'w-12');
   const sidebarClasses = `
     h-screen
-    bg-slate-900 border-r border-slate-700
+    bg-background
     flex flex-col
     transition-all duration-200 ease-in-out
     ${sidebarWidth}
@@ -136,7 +136,7 @@ export default function MainSidebar({
           {/* Logo */}
           <div className="flex justify-center mb-3 px-3">
             <div className="w-6 h-6 rounded-lg gradient-accent flex items-center justify-center">
-              <span className="text-white font-bold text-xs">SB</span>
+              <span className="text-white font-bold text-xs">P</span>
             </div>
           </div>
 

@@ -2,7 +2,7 @@ import { FileText, User } from 'lucide-react';
 
 export default function TopNav({ onDocumentsClick, onProfileClick }) {
   return (
-    <nav className="glass border-b border-border/50 h-12 px-3 sm:px-5 flex items-center justify-between">
+    <nav className="bg-background h-12 px-3 sm:px-5 flex items-center justify-between">
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
         <h1 className="text-sm sm:text-lg font-semibold text-text-primary truncate">
           <span className="hidden sm:inline">Prosey: Your Second Brain and Digital Garden</span>

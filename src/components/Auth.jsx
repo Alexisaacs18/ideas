@@ -88,27 +88,27 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
       onClick={onClose}
     >
       <div 
-        className="bg-slate-900 border border-slate-700 rounded-2xl p-10 w-[90%] max-w-[420px]"
+        className="bg-surface border border-border rounded-2xl p-10 w-[90%] max-w-[420px]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="text-center mb-6">
           <div className="flex flex-col items-center gap-3 mb-4">
             <div className="w-14 h-14 rounded-xl gradient-accent flex items-center justify-center">
-              <span className="text-white font-bold text-2xl">SB</span>
+              <span className="text-white font-bold text-2xl">P</span>
             </div>
-            <h1 className="text-2xl font-semibold text-slate-100">Prosey</h1>
+            <h1 className="text-2xl font-semibold text-text-primary">Prosey</h1>
           </div>
           
           {/* Mode Tabs */}
-          <div className="flex gap-2 bg-slate-800/50 p-1 rounded-lg mb-6">
+          <div className="flex gap-2 bg-background/50 p-1 rounded-lg mb-6">
             <button
               type="button"
               onClick={() => handleModeSwitch(false)}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                 !isSignUp
                   ? 'bg-indigo-500 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               Sign In
@@ -119,14 +119,14 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                 isSignUp
                   ? 'bg-indigo-500 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               Sign Up
             </button>
           </div>
           
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-text-secondary">
             {isSignUp ? 'Create a new account to get started' : 'Sign in to your account'}
           </p>
         </div>
@@ -140,21 +140,21 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
           )}
           
           {isSignUp && (
-            <div className="flex items-center gap-3 px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus-within:border-indigo-500/50 transition-colors">
-              <UserIcon size={18} className="text-slate-400 flex-shrink-0" />
+            <div className="flex items-center gap-3 px-4 py-3 bg-background/50 border border-border rounded-lg focus-within:border-indigo-500/50 transition-colors">
+              <UserIcon size={18} className="text-text-secondary flex-shrink-0" />
               <input
                 type="text"
                 placeholder="Name (optional)"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="flex-1 bg-transparent border-none outline-none text-slate-100 text-sm placeholder:text-slate-500"
+                className="flex-1 bg-transparent border-none outline-none text-text-primary text-sm placeholder:text-text-secondary"
                 disabled={isLoading}
               />
             </div>
           )}
 
-          <div className="flex items-center gap-3 px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus-within:border-indigo-500/50 transition-colors">
-            <Mail size={18} className="text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-3 px-4 py-3 bg-background/50 border border-border rounded-lg focus-within:border-indigo-500/50 transition-colors">
+            <Mail size={18} className="text-text-secondary flex-shrink-0" />
             <input
               type="email"
               placeholder="Email"
@@ -162,12 +162,12 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={isLoading}
-              className="flex-1 bg-transparent border-none outline-none text-slate-100 text-sm placeholder:text-slate-500"
+              className="flex-1 bg-transparent border-none outline-none text-text-primary text-sm placeholder:text-text-secondary"
             />
           </div>
 
-          <div className="flex items-center gap-3 px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus-within:border-indigo-500/50 transition-colors">
-            <Lock size={18} className="text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-3 px-4 py-3 bg-background/50 border border-border rounded-lg focus-within:border-indigo-500/50 transition-colors">
+            <Lock size={18} className="text-text-secondary flex-shrink-0" />
             <input
               type="password"
               placeholder="Password"
@@ -176,7 +176,7 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
               required
               minLength={6}
               disabled={isLoading}
-              className="flex-1 bg-transparent border-none outline-none text-slate-100 text-sm placeholder:text-slate-500"
+              className="flex-1 bg-transparent border-none outline-none text-text-primary text-sm placeholder:text-text-secondary"
             />
           </div>
 

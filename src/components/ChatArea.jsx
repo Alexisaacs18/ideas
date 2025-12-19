@@ -14,7 +14,7 @@ export default function ChatArea({ messages, isTyping }) {
   }, [messages, isTyping]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-8">
+    <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-8 bg-background">
       <div className="max-w-4xl mx-auto">
         {messages.length === 0 && !isTyping ? (
           <div className="flex items-center justify-center h-full min-h-[60vh]">

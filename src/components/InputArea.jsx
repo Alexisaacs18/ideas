@@ -69,7 +69,7 @@ export default function InputArea({ onSend, onFileUpload, uploadProgress, upload
   };
 
   return (
-    <div className="border-t border-border/50 bg-background">
+    <div className="bg-background">
       {uploadProgress !== null && uploadProgress < 100 && (
         <div className="px-3 sm:px-6 py-2">
           <div className="h-1 bg-surface rounded-full overflow-hidden">
