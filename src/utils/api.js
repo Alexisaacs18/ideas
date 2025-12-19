@@ -323,5 +323,51 @@ export const api = {
       throw error;
     }
   },
+
+  async deleteUser(userId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to delete user' }));
+        throw new Error(error.error || 'Failed to delete user');
+      }
+
+      return response.json();
+    } catch (error) {
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error('Unable to connect to our servers. Please check your internet connection and try again.');
+      }
+      throw error;
+    }
+  },
+
+  async clearR2Documents() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/r2/clear`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to clear R2 documents' }));
+        throw new Error(error.error || 'Failed to clear R2 documents');
+      }
+
+      return response.json();
+    } catch (error) {
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error('Unable to connect to our servers. Please check your internet connection and try again.');
+      }
+      throw error;
+    }
+  },
 };
 

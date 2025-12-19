@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Clock } from 'lucide-react';
+import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Clock, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { api } from '../utils/api';
 
 const ADMIN_PASSWORD = 'S3ahawk-1845!';
 
@@ -18,6 +19,9 @@ export default function Admin() {
   const [sortBy, setSortBy] = useState('documents'); // 'documents', 'chats', 'avgChats', 'status', 'email'
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'signedIn', 'anonymous'
+  const [deletingUserId, setDeletingUserId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [clearingR2, setClearingR2] = useState(false);
 
   // Check authentication on mount
   useEffect(() => {
@@ -326,6 +330,43 @@ export default function Admin() {
       : <ArrowDown className="w-3 h-3 ml-1 text-indigo-400" />;
   };
 
+  const handleDeleteUser = async (userId) => {
+    if (showDeleteConfirm !== userId) {
+      setShowDeleteConfirm(userId);
+      return;
+    }
+
+    setDeletingUserId(userId);
+    try {
+      const result = await api.deleteUser(userId);
+      toast.success(`User deleted successfully. ${result.deletedDocuments} documents and ${result.deletedFiles} files removed.`);
+      setShowDeleteConfirm(null);
+      // Reload stats
+      await loadStats();
+    } catch (error) {
+      toast.error(error.message || 'Failed to delete user');
+      setShowDeleteConfirm(null);
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  const handleClearR2Documents = async () => {
+    if (!window.confirm('⚠️ WARNING: This will delete ALL documents from R2 storage. This action is IRREVERSIBLE!\n\nAre you sure you want to continue?')) {
+      return;
+    }
+
+    setClearingR2(true);
+    try {
+      const result = await api.clearR2Documents();
+      toast.success(`R2 cleared: ${result.deletedCount} files deleted.`);
+    } catch (error) {
+      toast.error(error.message || 'Failed to clear R2 documents');
+    } finally {
+      setClearingR2(false);
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -404,13 +445,32 @@ export default function Admin() {
               <h1 className="text-2xl font-bold text-text-primary">Admin Dashboard</h1>
               <p className="text-sm text-text-secondary mt-1">User statistics and analytics</p>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-surface/50 transition-colors text-text-secondary hover:text-text-primary"
-            >
-              <LogOut size={18} />
-              <span>Sign Out</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleClearR2Documents}
+                disabled={clearingR2}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {clearingR2 ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Clearing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={18} />
+                    <span>Clear R2 Documents</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-surface/50 transition-colors text-text-secondary hover:text-text-primary"
+              >
+                <LogOut size={18} />
+                <span>Sign Out</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -583,6 +643,9 @@ export default function Admin() {
                           {getSortIcon('lastActivity')}
                         </div>
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
@@ -631,11 +694,44 @@ export default function Admin() {
                               </span>
                             </div>
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {showDeleteConfirm === user.user_id ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleDeleteUser(user.user_id)}
+                                  disabled={deletingUserId === user.user_id}
+                                  className="px-3 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {deletingUserId === user.user_id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin inline" />
+                                  ) : (
+                                    'Confirm'
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => setShowDeleteConfirm(null)}
+                                  disabled={deletingUserId === user.user_id}
+                                  className="px-3 py-1 text-xs bg-background/50 hover:bg-background/70 text-text-primary rounded transition-colors disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleDeleteUser(user.user_id)}
+                                disabled={deletingUserId !== null}
+                                className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Delete user and all their data"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="6" className="px-6 py-12 text-center">
+                        <td colSpan="7" className="px-6 py-12 text-center">
                           <p className="text-text-secondary">
                             {searchQuery || filterStatus !== 'all' 
                               ? 'No users match your filters' 
@@ -678,6 +774,11 @@ export default function Admin() {
                               • {stats.totals.activeUsers} active (30d)
                             </span>
                           )}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm font-semibold text-text-secondary">
+                          —
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

@@ -82,6 +82,100 @@ async function verifyPassword(password, storedHash) {
   return computedHashHex === hashHex;
 }
 
+// Encryption utilities using Web Crypto API (AES-GCM)
+// Get or derive encryption key from user_id and master key
+async function getEncryptionKey(userId, env) {
+  // Get master encryption key from Cloudflare secrets
+  const masterKey = env.ENCRYPTION_KEY;
+  if (!masterKey) {
+    throw new Error('ENCRYPTION_KEY secret not configured. Please set it in Cloudflare dashboard.');
+  }
+  
+  // Derive per-user key from master key + user_id
+  // This ensures each user has a unique encryption key
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(masterKey),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+  
+  // Use user_id as salt for key derivation
+  const salt = encoder.encode(userId);
+  
+  // Derive a 256-bit key for AES-GCM
+  const derivedKey = await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+  
+  return derivedKey;
+}
+
+// Encrypt text using AES-GCM
+async function encryptText(text, userId, env) {
+  const key = await getEncryptionKey(userId, env);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  
+  // Generate random IV (96 bits for AES-GCM)
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  
+  // Encrypt
+  const encrypted = await crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv: iv
+    },
+    key,
+    data
+  );
+  
+  // Combine IV and encrypted data
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  
+  // Return as base64 for storage
+  return btoa(String.fromCharCode(...combined));
+}
+
+// Decrypt text using AES-GCM
+async function decryptText(encryptedBase64, userId, env) {
+  const key = await getEncryptionKey(userId, env);
+  
+  // Decode from base64
+  const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+  
+  // Extract IV (first 12 bytes) and encrypted data
+  const iv = combined.slice(0, 12);
+  const encrypted = combined.slice(12);
+  
+  // Decrypt
+  const decrypted = await crypto.subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: iv
+    },
+    key,
+    encrypted
+  );
+  
+  // Convert to text
+  const decoder = new TextDecoder();
+  return decoder.decode(decrypted);
+}
+
 // Utility: Add CORS headers to response
 function addCorsHeaders(response) {
   const newHeaders = new Headers(response.headers);
@@ -1108,11 +1202,33 @@ async function handleUpload(request, env) {
       );
     }
     
-    // Store file in R2
+    // Generate document ID
     const documentId = generateId();
     const filePath = `${actualUserId}/${documentId}/${filename}`;
+    const encryptedTextPath = `${actualUserId}/${documentId}/encrypted.txt`;
     
-    // Reset file stream for R2 upload
+    // 1. Encrypt and store full text in R2
+    try {
+      const encryptedText = await encryptText(text, actualUserId, env);
+      const encryptedBuffer = new TextEncoder().encode(encryptedText);
+      await env.DOCS_BUCKET.put(encryptedTextPath, encryptedBuffer, {
+        httpMetadata: {
+          contentType: 'text/plain',
+        },
+      });
+      console.log('✅ Encrypted text stored in R2');
+    } catch (error) {
+      console.error('Error encrypting text:', error);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to encrypt document',
+          details: error.message
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // 2. Store original file in R2 (for reference, but encrypted text is the source of truth)
     const fileBuffer = await file.arrayBuffer();
     await env.DOCS_BUCKET.put(filePath, fileBuffer, {
       httpMetadata: {
@@ -1120,17 +1236,17 @@ async function handleUpload(request, env) {
       },
     });
     
-    // Save document metadata
+    // 3. Save document metadata
     await env.DB.prepare(
       'INSERT INTO documents (id, user_id, filename, file_path, size_bytes) VALUES (?, ?, ?, ?, ?)'
     ).bind(documentId, actualUserId, filename, filePath, fileSize).run();
     
-    // Save embeddings in batch using D1 batch API for efficiency
+    // 4. Save embeddings WITHOUT chunk_text (only embedding vectors for search)
     const embeddingStatements = embeddings.map((emb) => {
       const embeddingId = generateId();
       return env.DB.prepare(
         'INSERT INTO embeddings (id, document_id, chunk_text, embedding, chunk_index) VALUES (?, ?, ?, ?, ?)'
-      ).bind(embeddingId, documentId, emb.chunk, emb.embedding, emb.index);
+      ).bind(embeddingId, documentId, null, emb.embedding, emb.index); // chunk_text is NULL
     });
     
     // Execute all inserts in a single batch transaction
@@ -1594,10 +1710,10 @@ async function handleChat(request, env) {
     // Get embedding for question
     const questionEmbedding = await getEmbeddings(question, apiKey);
     
-    // Get all embeddings for this user's documents
+    // Get all embeddings for this user's documents (chunk_text may be NULL now)
     const allEmbeddings = await env.DB.prepare(`
       SELECT e.id, e.document_id, e.chunk_text, e.embedding, e.chunk_index,
-             d.filename, d.id as doc_id
+             d.filename, d.id as doc_id, d.file_path
       FROM embeddings e
       JOIN documents d ON e.document_id = d.id
       WHERE d.user_id = ?
@@ -1623,8 +1739,8 @@ async function handleChat(request, env) {
           similarity,
           document_id: row.doc_id,
           filename: row.filename,
-          chunk_text: row.chunk_text,
           chunk_index: row.chunk_index,
+          file_path: row.file_path,
         });
       } catch (error) {
         console.error('Error parsing embedding:', error);
@@ -1638,13 +1754,6 @@ async function handleChat(request, env) {
     console.log('=== CHAT ENDPOINT DEBUG ===');
     console.log('Total similarities found:', similarities.length);
     console.log('Top chunks selected:', topChunks.length);
-    console.log('Top chunks structure:', topChunks.map(c => ({
-      similarity: c.similarity,
-      has_chunk_text: !!c.chunk_text,
-      chunk_text_length: c.chunk_text?.length || 0,
-      filename: c.filename,
-      document_id: c.document_id
-    })));
     
     if (topChunks.length === 0) {
       return new Response(
@@ -1656,23 +1765,79 @@ async function handleChat(request, env) {
       );
     }
     
-    // Build context from top chunks
-    const context = topChunks
-      .map(chunk => chunk.chunk_text)
-      .filter(Boolean) // Remove any null/undefined
-      .join('\n\n---\n\n');
+    // Retrieve and decrypt documents for top chunks
+    // Group by document_id to avoid decrypting the same document multiple times
+    const documentMap = new Map();
+    const contextChunks = [];
+    
+    for (const chunk of topChunks) {
+      let decryptedText = null;
+      
+      // Check if we've already decrypted this document
+      if (documentMap.has(chunk.document_id)) {
+        decryptedText = documentMap.get(chunk.document_id);
+      } else {
+        // Retrieve encrypted text from R2
+        try {
+          // Construct path to encrypted text: user_id/document_id/encrypted.txt
+          const pathParts = chunk.file_path.split('/');
+          const encryptedTextPath = `${pathParts[0]}/${pathParts[1]}/encrypted.txt`;
+          
+          const encryptedObject = await env.DOCS_BUCKET.get(encryptedTextPath);
+          if (!encryptedObject) {
+            console.warn(`Encrypted text not found for document ${chunk.document_id}`);
+            continue;
+          }
+          
+          const encryptedBase64 = await encryptedObject.text();
+          decryptedText = await decryptText(encryptedBase64, user_id, env);
+          documentMap.set(chunk.document_id, decryptedText);
+          console.log(`✅ Decrypted document ${chunk.document_id}`);
+        } catch (error) {
+          console.error(`Error decrypting document ${chunk.document_id}:`, error);
+          // Continue with other chunks
+          continue;
+        }
+      }
+      
+      if (decryptedText) {
+        // Extract relevant section based on chunk_index
+        // Since we chunked with 1500 chars and 100 overlap, estimate position
+        const chunkSize = 1500;
+        const overlap = 100;
+        const startPos = chunk.chunk_index * (chunkSize - overlap);
+        const endPos = Math.min(startPos + chunkSize, decryptedText.length);
+        const relevantSection = decryptedText.substring(Math.max(0, startPos - 200), endPos + 200); // Add context
+        
+        contextChunks.push(relevantSection);
+      }
+    }
+    
+    // Build context from decrypted chunks
+    const context = contextChunks.join('\n\n---\n\n');
     
     console.log('Context built, length:', context.length);
     
     // Get answer from Groq API
     const answer = await generateAnswer(question, context, env);
     
-    // Format sources
-    const sources = topChunks.map(chunk => ({
-      doc_id: chunk.document_id,
-      filename: chunk.filename,
-      chunk_text: chunk.chunk_text.substring(0, 200) + (chunk.chunk_text.length > 200 ? '...' : ''),
-    }));
+    // Format sources (use decrypted text preview)
+    const sources = [];
+    for (const chunk of topChunks) {
+      const decryptedText = documentMap.get(chunk.document_id);
+      if (decryptedText) {
+        const chunkSize = 1500;
+        const overlap = 100;
+        const startPos = chunk.chunk_index * (chunkSize - overlap);
+        const endPos = Math.min(startPos + chunkSize, decryptedText.length);
+        const preview = decryptedText.substring(Math.max(0, startPos), Math.min(startPos + 200, endPos));
+        sources.push({
+          doc_id: chunk.document_id,
+          filename: chunk.filename || 'Document',
+          chunk_text: preview + (endPos > startPos + 200 ? '...' : ''),
+        });
+      }
+    }
     
     // Save message to history
     const messageId = generateId();
@@ -1902,24 +2067,48 @@ async function handleAddLink(request, env) {
 
     // Store document
     const documentId = generateId();
+    const filePath = `${userId}/${documentId}/${title}.txt`;
+    const encryptedTextPath = `${userId}/${documentId}/encrypted.txt`;
+    
+    // 1. Encrypt and store full text in R2
+    try {
+      const encryptedText = await encryptText(text, userId, env);
+      const encryptedBuffer = new TextEncoder().encode(encryptedText);
+      await env.DOCS_BUCKET.put(encryptedTextPath, encryptedBuffer, {
+        httpMetadata: {
+          contentType: 'text/plain',
+        },
+      });
+      console.log('✅ Encrypted text stored in R2 for link');
+    } catch (error) {
+      console.error('Error encrypting link text:', error);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to encrypt document',
+          details: error.message
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
     await env.DB.prepare(
       'INSERT INTO documents (id, user_id, filename, file_path, upload_date, size_bytes, doc_type, source_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       documentId,
       userId,
       title,
-      linkUrl,
+      filePath,
       Math.floor(Date.now() / 1000),
       text.length,
       'link',
       linkUrl
     ).run();
 
-    // Store embeddings in batch
+    // 2. Store embeddings WITHOUT chunk_text (only embedding vectors)
     const embeddingStatements = embeddings.map(e => 
       env.DB.prepare(
         'INSERT INTO embeddings (id, document_id, chunk_text, embedding, chunk_index) VALUES (?, ?, ?, ?, ?)'
-      ).bind(generateId(), documentId, e.chunk, e.embedding, e.index)
+      ).bind(generateId(), documentId, null, e.embedding, e.index) // chunk_text is NULL
     );
 
     await env.DB.batch(embeddingStatements);
@@ -2074,23 +2263,47 @@ async function handleAddText(request, env) {
     // Store document
     const documentId = generateId();
     const docTitle = title || 'Untitled note';
+    const filePath = `${userId}/${documentId}/${docTitle}.txt`;
+    const encryptedTextPath = `${userId}/${documentId}/encrypted.txt`;
+    
+    // 1. Encrypt and store full text in R2
+    try {
+      const encryptedText = await encryptText(content, userId, env);
+      const encryptedBuffer = new TextEncoder().encode(encryptedText);
+      await env.DOCS_BUCKET.put(encryptedTextPath, encryptedBuffer, {
+        httpMetadata: {
+          contentType: 'text/plain',
+        },
+      });
+      console.log('✅ Encrypted text stored in R2 for text snippet');
+    } catch (error) {
+      console.error('Error encrypting text snippet:', error);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to encrypt document',
+          details: error.message
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
     await env.DB.prepare(
       'INSERT INTO documents (id, user_id, filename, file_path, upload_date, size_bytes, doc_type) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       documentId,
       userId,
       docTitle,
-      'text-snippet',
+      filePath,
       Math.floor(Date.now() / 1000),
       content.length,
       'text'
     ).run();
 
-    // Store embeddings in batch
+    // 2. Store embeddings WITHOUT chunk_text (only embedding vectors)
     const embeddingStatements = embeddings.map(e => 
       env.DB.prepare(
         'INSERT INTO embeddings (id, document_id, chunk_text, embedding, chunk_index) VALUES (?, ?, ?, ?, ?)'
-      ).bind(generateId(), documentId, e.chunk, e.embedding, e.index)
+      ).bind(generateId(), documentId, null, e.embedding, e.index) // chunk_text is NULL
     );
 
     await env.DB.batch(embeddingStatements);
@@ -2139,9 +2352,20 @@ async function handleDeleteDocument(request, env) {
       );
     }
     
-    // Delete from R2
+    // Delete from R2 - delete both the original file and encrypted.txt
     try {
       await env.DOCS_BUCKET.delete(document.file_path);
+      
+      // Also delete encrypted.txt if it exists
+      const pathParts = document.file_path.split('/');
+      if (pathParts.length >= 2) {
+        const encryptedPath = `${pathParts[0]}/${pathParts[1]}/encrypted.txt`;
+        try {
+          await env.DOCS_BUCKET.delete(encryptedPath);
+        } catch (e) {
+          // Ignore if encrypted.txt doesn't exist (old documents)
+        }
+      }
     } catch (error) {
       console.error('Error deleting from R2:', error);
       // Continue with DB deletion even if R2 deletion fails
@@ -2162,6 +2386,138 @@ async function handleDeleteDocument(request, env) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// API Endpoint: Delete user (Admin only)
+async function handleDeleteUser(request, env) {
+  try {
+    const url = new URL(request.url);
+    // Path format: /api/admin/users/{userId}/delete
+    const pathParts = url.pathname.split('/').filter(p => p);
+    const userIdIndex = pathParts.indexOf('users') + 1;
+    const userId = pathParts[userIdIndex];
+    
+    if (!userId || userId === 'delete') {
+      return new Response(
+        JSON.stringify({ error: 'User ID is required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Get all documents for this user
+    const documents = await env.DB.prepare(
+      'SELECT id, file_path FROM documents WHERE user_id = ?'
+    ).bind(userId).all();
+    
+    // Delete all R2 files for this user
+    let deletedFiles = 0;
+    let failedFiles = 0;
+    
+    if (documents.results && documents.results.length > 0) {
+      for (const doc of documents.results) {
+        try {
+          // Delete original file
+          await env.DOCS_BUCKET.delete(doc.file_path);
+          deletedFiles++;
+          
+          // Also delete encrypted.txt
+          const pathParts = doc.file_path.split('/');
+          if (pathParts.length >= 2) {
+            const encryptedPath = `${pathParts[0]}/${pathParts[1]}/encrypted.txt`;
+            try {
+              await env.DOCS_BUCKET.delete(encryptedPath);
+            } catch (e) {
+              // Ignore if encrypted.txt doesn't exist
+            }
+          }
+        } catch (error) {
+          console.error(`Error deleting R2 file ${doc.file_path}:`, error);
+          failedFiles++;
+        }
+      }
+    }
+    
+    // Delete all embeddings for user's documents
+    const documentIds = documents.results?.map(d => d.id) || [];
+    if (documentIds.length > 0) {
+      for (const docId of documentIds) {
+        await env.DB.prepare(
+          'DELETE FROM embeddings WHERE document_id = ?'
+        ).bind(docId).run();
+      }
+    }
+    
+    // Delete all documents
+    await env.DB.prepare(
+      'DELETE FROM documents WHERE user_id = ?'
+    ).bind(userId).run();
+    
+    // Delete all messages
+    await env.DB.prepare(
+      'DELETE FROM messages WHERE user_id = ?'
+    ).bind(userId).run();
+    
+    // Delete user
+    await env.DB.prepare(
+      'DELETE FROM users WHERE id = ?'
+    ).bind(userId).run();
+    
+    return new Response(
+      JSON.stringify({ 
+        message: 'User deleted successfully',
+        deletedFiles,
+        failedFiles,
+        deletedDocuments: documentIds.length
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Delete user error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// API Endpoint: Clear all R2 documents (Admin only)
+async function handleClearR2Documents(request, env) {
+  try {
+    // List all objects in R2 bucket
+    const objects = await env.DOCS_BUCKET.list();
+    
+    let deletedCount = 0;
+    let failedCount = 0;
+    
+    // Delete all objects
+    if (objects.objects && objects.objects.length > 0) {
+      for (const obj of objects.objects) {
+        try {
+          await env.DOCS_BUCKET.delete(obj.key);
+          deletedCount++;
+        } catch (error) {
+          console.error(`Error deleting ${obj.key}:`, error);
+          failedCount++;
+        }
+      }
+    }
+    
+    return new Response(
+      JSON.stringify({ 
+        message: 'R2 documents cleared',
+        deletedCount,
+        failedCount,
+        totalObjects: objects.objects?.length || 0
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Clear R2 error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -2203,6 +2559,10 @@ export default {
         response = await handleAddText(request, env);
       } else if (path.startsWith('/api/documents/') && request.method === 'DELETE') {
         response = await handleDeleteDocument(request, env);
+      } else if (path.startsWith('/api/admin/users/') && path.endsWith('/delete') && request.method === 'DELETE') {
+        response = await handleDeleteUser(request, env);
+      } else if (path === '/api/admin/r2/clear' && request.method === 'POST') {
+        response = await handleClearR2Documents(request, env);
       } else if (path === '/api/admin/stats' && request.method === 'GET') {
         response = await handleAdminStats(request, env);
       } else if (path === '/api/config/oauth-client-id' && request.method === 'GET') {
