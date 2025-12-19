@@ -1350,6 +1350,7 @@ async function handleAdminStats(request, env) {
     let totalChats = 0;
     let signedInUsers = 0;
     let anonymousUsers = 0;
+    let activeUsers = 0; // Users active in the last 30 days
 
     // Calculate stats for each user
     for (const user of allUsers.results) {
@@ -1449,6 +1450,13 @@ async function handleAdminStats(request, env) {
         anonymousUsers++;
       }
 
+      // Check if user is active (activity within last 30 days)
+      const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+      const isActive = lastActivity && lastActivity >= thirtyDaysAgo;
+      if (isActive) {
+        activeUsers++;
+      }
+
       users.push({
         user_id: userId,
         email: email && !email.endsWith('@temp.local') ? email : null,
@@ -1468,6 +1476,7 @@ async function handleAdminStats(request, env) {
       totalUsers: allUsers.results.length,
       signedInUsers,
       anonymousUsers,
+      activeUsers, // Users active in the last 30 days
       totalDocuments,
       totalChats,
       averageChatsPerDay: overallAverageChatsPerDay,

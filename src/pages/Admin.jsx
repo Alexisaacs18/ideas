@@ -376,6 +376,11 @@ export default function Admin() {
                 </p>
                 <p className="text-xs text-text-secondary mt-1">
                   {stats?.totals?.signedInUsers ?? 0} signed in, {stats?.totals?.anonymousUsers ?? 0} anonymous
+                  {stats?.totals?.activeUsers !== undefined && (
+                    <span className="ml-2 text-indigo-400">
+                      • {stats.totals.activeUsers} active (30d)
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -609,6 +614,11 @@ export default function Admin() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-semibold text-text-secondary">
                           {stats?.totals?.signedInUsers ?? 0} signed in, {stats?.totals?.anonymousUsers ?? 0} anonymous
+                          {stats?.totals?.activeUsers !== undefined && (
+                            <span className="ml-2 text-indigo-400">
+                              • {stats.totals.activeUsers} active (30d)
+                            </span>
+                          )}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
