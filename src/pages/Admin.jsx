@@ -117,35 +117,94 @@ export default function Admin() {
   const loadStats = async () => {
     setIsLoadingStats(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev'}/api/admin/stats`, {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev';
+      const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_session')}`,
+          'Content-Type': 'application/json',
         },
       });
       
       console.log('Admin stats response status:', response.status);
+      console.log('Admin stats response ok:', response.ok);
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Admin stats error response:', errorText);
-        throw new Error(`Failed to load stats: ${response.status} ${errorText}`);
+        let errorText;
+        try {
+          errorText = await response.text();
+          console.error('Admin stats error response:', errorText);
+        } catch (e) {
+          errorText = `HTTP ${response.status}`;
+        }
+        
+        // Handle specific status codes
+        if (response.status === 500) {
+          throw new Error('Server error. Please try again in a moment.');
+        }
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('Access denied. Please sign in again.');
+        }
+        throw new Error(`Unable to load statistics: ${errorText}`);
       }
       
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error('Failed to parse JSON response:', e);
+        throw new Error('Invalid response from server. Please try again.');
+      }
+      
       console.log('Admin stats data received:', data);
       console.log('Users count:', data.users?.length || 0);
       console.log('Totals:', data.totals);
       
       if (!data.users || !data.totals) {
         console.error('Invalid data structure:', data);
-        throw new Error('Invalid response format');
+        // Initialize with empty data instead of throwing
+        setStats({
+          users: [],
+          totals: {
+            totalUsers: 0,
+            signedInUsers: 0,
+            anonymousUsers: 0,
+            totalDocuments: 0,
+            totalChats: 0,
+            averageChatsPerDay: 0,
+            activeUsers: 0,
+          }
+        });
+        toast.error('Received incomplete data. Showing empty table.');
+        return;
       }
       
       setStats(data);
     } catch (err) {
       console.error('Failed to load stats:', err);
       console.error('Error details:', err.message, err.stack);
-      toast.error(`Failed to load statistics: ${err.message}`);
+      
+      // Check if it's a network error
+      if (err.message.includes('Failed to fetch') || 
+          err.message.includes('NetworkError') || 
+          err.name === 'TypeError') {
+        toast.error('Unable to connect to the server. Please check your internet connection and try again.');
+      } else {
+        toast.error(err.message || 'Failed to load statistics. Please try again.');
+      }
+      
+      // Set empty stats so table structure still shows
+      setStats({
+        users: [],
+        totals: {
+          totalUsers: 0,
+          signedInUsers: 0,
+          anonymousUsers: 0,
+          totalDocuments: 0,
+          totalChats: 0,
+          averageChatsPerDay: 0,
+          activeUsers: 0,
+        }
+      });
     } finally {
       setIsLoadingStats(false);
     }
