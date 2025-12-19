@@ -19,12 +19,12 @@ node generate-logo-png.js
 
 ### Option 2: Using ImageMagick
 ```bash
-convert public/logo.svg -resize 512x512 -background none public/logo.png
+convert logo.svg -resize 512x512 -background none public/logo.png
 ```
 
 ### Option 3: Online Converter
 1. Go to https://cloudconvert.com/svg-to-png
-2. Upload `logo.svg`
+2. Upload `logo.svg` (from project root)
 3. Set size to 512x512
 4. Download and save as `logo.png` in the `public/` folder
 

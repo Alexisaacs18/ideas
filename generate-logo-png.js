@@ -11,7 +11,7 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
-const svgPath = path.join(__dirname, 'public', 'logo.svg');
+const svgPath = path.join(__dirname, 'logo.svg');
 const pngPath = path.join(__dirname, 'public', 'logo.png');
 
 async function convertSvgToPng() {
@@ -31,7 +31,7 @@ async function convertSvgToPng() {
     console.log('   - https://cloudconvert.com/svg-to-png');
     console.log('   - https://convertio.co/svg-png/');
     console.log('   Or install ImageMagick and run:');
-    console.log('   convert public/logo.svg -resize 512x512 public/logo.png');
+    console.log('   convert logo.svg -resize 512x512 public/logo.png');
   }
 }
 
