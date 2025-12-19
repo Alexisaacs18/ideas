@@ -11,9 +11,5 @@ export default defineConfig({
   server: {
     historyApiFallback: true, // Important for SPA routing in dev
   },
-  // Optimize dependencies to avoid esbuild issues
-  optimizeDeps: {
-    exclude: ['wrangler']
-  }
 })
 

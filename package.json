@@ -9,7 +9,7 @@
 		"dev:full": "npm run build:pages && wrangler dev",
 		"build": "npm run copy-logo && vite build",
 		"build:worker": "npm run copy-logo && vite build --config vite.config.js",
-		"build:pages": "npm run copy-logo && SKIP_WRANGLER=true vite build --config vite.config.pages.js",
+		"build:pages": "npm run copy-logo && vite build --config vite.config.pages.js",
 		"copy-logo": "cp logo.svg public/logo.svg || true",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
