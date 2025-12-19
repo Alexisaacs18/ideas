@@ -2691,41 +2691,49 @@ export default {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       } else if (!path.startsWith('/api/')) {
-        // Not an API route - serve static files
+        // Not an API route - serve static files for SPA
         // Check if ASSETS binding exists (for static file serving)
         if (env.ASSETS) {
           try {
-            // Try to fetch the requested file
-            const assetResponse = await env.ASSETS.fetch(request);
+            // Check if this is a file request (has extension) or a route (SPA route like /admin, /documents)
+            const hasFileExtension = path.includes('.') && !path.endsWith('/');
             
-            // If found, return it
-            if (assetResponse.status === 200) {
+            if (hasFileExtension) {
+              // It's a file request - try to fetch the actual file
+              const assetResponse = await env.ASSETS.fetch(request);
+              if (assetResponse.status === 200) {
+                return assetResponse;
+              }
+              // File not found - return 404
               return assetResponse;
-            }
-            
-            // If not found and it's a route (no file extension), serve index.html for SPA
-            if (!path.includes('.') || path.endsWith('/')) {
+            } else {
+              // It's a SPA route (like /admin, /documents, /) - serve index.html
+              console.log('Serving index.html for SPA route:', path);
               const indexRequest = new Request(new URL('/index.html', request.url), request);
               const indexResponse = await env.ASSETS.fetch(indexRequest);
               if (indexResponse.status === 200) {
                 return indexResponse;
               }
+              // index.html not found - return 404
+              return new Response('index.html not found', { status: 404 });
             }
-            
-            // Otherwise return the 404
-            return assetResponse;
           } catch (error) {
             console.error('Error serving static file:', error);
-            // Fall through to error handling
+            // Fall through to serve index.html as fallback
+            try {
+              const indexRequest = new Request(new URL('/index.html', request.url), request);
+              const indexResponse = await env.ASSETS.fetch(indexRequest);
+              if (indexResponse.status === 200) {
+                return indexResponse;
+              }
+            } catch (e) {
+              console.error('Error serving index.html fallback:', e);
+            }
+            return new Response('Error serving static files', { status: 500 });
           }
         }
         
-        // If ASSETS binding doesn't exist, we're using legacy assets format
-        // With legacy assets and not_found_handling = "single-page-application",
-        // the assets system should serve index.html automatically for non-matching routes
-        // However, the Worker is still called, so we need to not interfere
-        // The best approach: redirect to index.html for non-API routes
-        // This ensures the SPA routing works correctly
+        // If ASSETS binding doesn't exist, redirect to index.html for SPA routing
         return Response.redirect(new URL('/index.html', request.url), 302);
       }
       
