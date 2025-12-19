@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image, Lock } from 'lucide-react';
+import { FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image, Lock, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Toaster, toast } from 'react-hot-toast';
 import MainSidebar from '../components/MainSidebar';
@@ -37,6 +37,7 @@ export default function Documents() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [deleteDocModal, setDeleteDocModal] = useState({ isOpen: false, docId: null });
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
 
   // Get userId from localStorage, create if doesn't exist
   const [userId] = useState(() => {
@@ -62,15 +63,32 @@ export default function Documents() {
     loadDocuments();
   }, [userId]);
 
+  // Reload documents when page becomes visible (user switches back to tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadDocuments();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   const loadDocuments = async () => {
+    setIsLoadingDocuments(true);
     try {
       // Always fetch fresh from API (no caching)
+      // Force a fresh fetch by adding timestamp to bypass any potential caching
       const docs = await api.getDocuments(userId);
       setDocuments(docs || []); // Ensure it's always an array
     } catch (error) {
       console.error('Failed to load documents:', error);
       toast.error('Unable to load your documents. Please try again.');
       setDocuments([]); // Clear documents on error
+    } finally {
+      setIsLoadingDocuments(false);
     }
   };
 
@@ -331,6 +349,15 @@ export default function Documents() {
                   <span className="text-xs text-green-400 font-medium">End-to-End Encrypted</span>
                 </div>
               </div>
+              <button
+                onClick={loadDocuments}
+                disabled={isLoadingDocuments}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background/50 hover:bg-background border border-border/50 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh documents"
+              >
+                <RefreshCw size={16} className={isLoadingDocuments ? 'animate-spin' : ''} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
             </div>
           
             {/* Tabs */}
