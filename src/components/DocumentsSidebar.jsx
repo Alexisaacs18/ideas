@@ -29,9 +29,23 @@ export default function DocumentsSidebar({
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      onUpload(file);
+    if (!file) return;
+    
+    // FIRST: Validate file size BEFORE anything else - this prevents any backend call
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    const isImage = file.type.startsWith('image/') || ['.png', '.jpg', '.jpeg', '.heic'].includes(fileExtension);
+    const maxSizeBytes = isImage ? 1 * 1024 * 1024 : 10 * 1024 * 1024; // 1MB for images, 10MB for others
+    const maxSizeMB = isImage ? 1 : 10;
+    
+    // Strict validation: file must be LESS than maxSize (not equal to)
+    if (file.size >= maxSizeBytes) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      toast.error(`File size limit exceeded. Your file is ${fileSizeMB}MB, but the maximum is ${maxSizeMB}MB for ${isImage ? 'images' : 'documents'}.`);
+      e.target.value = '';
+      return; // STOP HERE - don't proceed to backend
     }
+    
+    onUpload(file);
     e.target.value = '';
   };
 
@@ -50,7 +64,8 @@ export default function DocumentsSidebar({
         onDocumentAdded();
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to add link');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to add the link. Please try again.');
       console.error('Link submission error:', error);
     } finally {
       setIsSubmitting(false);
@@ -73,7 +88,8 @@ export default function DocumentsSidebar({
         onDocumentAdded();
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to save text');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to save your text. Please try again.');
       console.error('Text submission error:', error);
     } finally {
       setIsSubmitting(false);
@@ -163,6 +179,17 @@ export default function DocumentsSidebar({
                 accept=".pdf,.txt,.csv,.png,.jpg,.jpeg,.heic"
                 className="hidden"
               />
+              <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <p className="text-xs text-amber-400 font-medium mb-1">
+                  ⚠️ File Size Limits
+                </p>
+                <p className="text-xs text-text-secondary/80">
+                  <span className="text-indigo-400 font-medium">10MB</span> max for PDF, TXT, CSV files
+                </p>
+                <p className="text-xs text-text-secondary/80">
+                  <span className="text-indigo-400 font-medium">1MB</span> max for Images (PNG, JPG, JPEG, HEIC)
+                </p>
+              </div>
               {uploadProgress !== null && (
                 <div className="mb-4 p-3 bg-background/50 border border-border/50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">

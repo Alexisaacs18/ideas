@@ -987,6 +987,20 @@ async function handleUpload(request, env) {
     const filename = file.name;
     const fileSize = file.size;
     
+    // Validate file size based on file type
+    const isImage = filename.match(/\.(png|jpg|jpeg|heic)$/i);
+    const maxSize = isImage ? 1 * 1024 * 1024 : 10 * 1024 * 1024; // 1MB for images, 10MB for others
+    const maxSizeMB = isImage ? 1 : 10;
+    
+    if (fileSize > maxSize) {
+      return new Response(
+        JSON.stringify({ 
+          error: `File size must be less than ${maxSizeMB}MB. Your file is ${(fileSize / (1024 * 1024)).toFixed(1)}MB` 
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
     // Extract text from file
     const text = await extractTextFromFile(file, filename, env);
     

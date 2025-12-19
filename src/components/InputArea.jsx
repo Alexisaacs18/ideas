@@ -20,11 +20,50 @@ export default function InputArea({ onSend, onFileUpload, uploadProgress, upload
     }
   };
 
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      onFileUpload(file);
+    if (!file) return;
+    
+    // FIRST: Validate file size BEFORE anything else - this prevents any backend call
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    const isImage = file.type.startsWith('image/') || ['.png', '.jpg', '.jpeg', '.heic'].includes(fileExtension);
+    const maxSizeBytes = isImage ? 1 * 1024 * 1024 : 10 * 1024 * 1024; // 1MB for images, 10MB for others
+    const maxSizeMB = isImage ? 1 : 10;
+    
+    // Strict validation: file must be LESS than maxSize (not equal to)
+    if (file.size >= maxSizeBytes) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      const errorMsg = `File size limit exceeded. Your file is ${fileSizeMB}MB, but the maximum is ${maxSizeMB}MB for ${isImage ? 'images' : 'documents'}.`;
+      if (window.toast) {
+        window.toast.error(errorMsg);
+      } else {
+        alert(errorMsg);
+      }
+      e.target.value = '';
+      return; // STOP HERE - don't proceed to backend
     }
+    
+    // SECOND: Validate file type
+    const validExtensions = ['.pdf', '.txt', '.csv', '.png', '.jpg', '.jpeg', '.heic'];
+    
+    if (!validExtensions.includes(fileExtension)) {
+      // Use toast if available, otherwise alert
+      if (window.toast) {
+        window.toast.error('Please upload PDF, TXT, CSV, or image files (PNG, JPG, JPEG, HEIC)');
+      } else {
+        alert('Please upload PDF, TXT, CSV, or image files (PNG, JPG, JPEG, HEIC)');
+      }
+      e.target.value = '';
+      return;
+    }
+    
+    onFileUpload(file);
     // Reset input so same file can be selected again
     e.target.value = '';
   };

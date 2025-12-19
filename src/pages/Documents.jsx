@@ -68,7 +68,7 @@ export default function Documents() {
       setDocuments(docs);
     } catch (error) {
       console.error('Failed to load documents:', error);
-      toast.error('Failed to load documents');
+      toast.error('Unable to load your documents. Please try again.');
     }
   };
 
@@ -83,7 +83,20 @@ export default function Documents() {
   const handleFileUpload = async (file) => {
     if (!file) return;
 
-    // Validate file type
+    // FIRST: Validate file size BEFORE anything else - this prevents any backend call
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    const isImage = file.type.startsWith('image/') || ['.png', '.jpg', '.jpeg', '.heic'].includes(fileExtension);
+    const maxSizeBytes = isImage ? 1 * 1024 * 1024 : 10 * 1024 * 1024; // 1MB for images, 10MB for others
+    const maxSizeMB = isImage ? 1 : 10;
+    
+    // Strict validation: file must be LESS than maxSize (not equal to)
+    if (file.size >= maxSizeBytes) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      toast.error(`File size limit exceeded. Your file is ${fileSizeMB}MB, but the maximum is ${maxSizeMB}MB for ${isImage ? 'images' : 'documents'}.`);
+      return; // STOP HERE - don't proceed to backend
+    }
+
+    // SECOND: Validate file type
     const validTypes = [
       'application/pdf',
       'text/plain',
@@ -94,16 +107,9 @@ export default function Documents() {
       'image/heic'
     ];
     const validExtensions = ['.pdf', '.txt', '.csv', '.png', '.jpg', '.jpeg', '.heic'];
-    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
     
     if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
       toast.error('Please upload PDF, TXT, CSV, or image files (PNG, JPG, JPEG, HEIC)');
-      return;
-    }
-
-    // Check file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size must be less than 10MB');
       return;
     }
 
@@ -138,7 +144,8 @@ export default function Documents() {
         setUploading(false);
       }, 500);
     } catch (error) {
-      toast.error(error.message || 'Upload failed');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to upload your file. Please try again.');
       setUploadProgress(null);
       setUploading(false);
       console.error('Upload error:', error);
@@ -157,7 +164,8 @@ export default function Documents() {
       await loadDocuments();
       setDeleteDocModal({ isOpen: false, docId: null });
     } catch (error) {
-      toast.error('Failed to delete document');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to delete the document. Please try again.');
       console.error('Delete error:', error);
       setDeleteDocModal({ isOpen: false, docId: null });
     }
@@ -219,7 +227,8 @@ export default function Documents() {
       setLinkUrl('');
       await loadDocuments();
     } catch (error) {
-      toast.error(error.message || 'Failed to add link');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to add the link. Please try again.');
       console.error('Link submission error:', error);
     } finally {
       setIsSubmitting(false);
@@ -240,7 +249,8 @@ export default function Documents() {
       setTextTitle('');
       await loadDocuments();
     } catch (error) {
-      toast.error(error.message || 'Failed to save text');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to save your text. Please try again.');
       console.error('Text submission error:', error);
     } finally {
       setIsSubmitting(false);
@@ -380,7 +390,7 @@ export default function Documents() {
                     <p className="text-xs text-text-secondary uppercase tracking-wider mb-2">
                       Supported formats:
                     </p>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 mb-3">
                       {['📄 PDF', '📝 TXT', '📊 CSV', '🖼️ Images (PNG, JPG)'].map((type) => (
                         <span
                           key={type}
@@ -390,6 +400,9 @@ export default function Documents() {
                         </span>
                       ))}
                     </div>
+                    <p className="text-xs text-text-secondary/70 font-medium">
+                      ⚠️ Max file size: <span className="text-indigo-400">10MB</span> (PDF, TXT, CSV) • <span className="text-indigo-400">1MB</span> (Images)
+                    </p>
                   </div>
                 </div>
               )}

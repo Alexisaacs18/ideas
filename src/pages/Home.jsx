@@ -158,7 +158,7 @@ export default function Home() {
               };
             } catch (frontendError) {
               console.error('Frontend OAuth error:', frontendError);
-              toast.error('OAuth authentication failed');
+              toast.error('Unable to sign in. Please try again.');
               window.history.replaceState({}, document.title, window.location.pathname);
               return;
             }
@@ -234,7 +234,7 @@ export default function Home() {
           window.history.replaceState({}, document.title, window.location.pathname);
         } catch (error) {
           console.error('OAuth callback error:', error);
-          toast.error('OAuth authentication failed');
+          toast.error('Unable to sign in. Please try again.');
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       };
@@ -351,7 +351,8 @@ export default function Home() {
         });
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to get response');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to send your message. Please try again.');
       console.error('Chat error:', error);
     } finally {
       setIsTyping(false);
@@ -508,7 +509,20 @@ export default function Home() {
   const handleFileUpload = async (file) => {
     if (!file) return;
 
-    // Validate file type
+    // FIRST: Validate file size BEFORE anything else - this prevents any backend call
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    const isImage = file.type.startsWith('image/') || ['.png', '.jpg', '.jpeg', '.heic'].includes(fileExtension);
+    const maxSizeBytes = isImage ? 1 * 1024 * 1024 : 10 * 1024 * 1024; // 1MB for images, 10MB for others
+    const maxSizeMB = isImage ? 1 : 10;
+    
+    // Strict validation: file must be LESS than maxSize (not equal to)
+    if (file.size >= maxSizeBytes) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      toast.error(`File size limit exceeded. Your file is ${fileSizeMB}MB, but the maximum is ${maxSizeMB}MB for ${isImage ? 'images' : 'documents'}.`);
+      return; // STOP HERE - don't proceed to backend
+    }
+
+    // SECOND: Validate file type
     const validTypes = [
       'application/pdf',
       'text/plain',
@@ -519,16 +533,9 @@ export default function Home() {
       'image/heic'
     ];
     const validExtensions = ['.pdf', '.txt', '.csv', '.png', '.jpg', '.jpeg', '.heic'];
-    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
     
     if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
       toast.error('Please upload PDF, TXT, CSV, or image files (PNG, JPG, JPEG, HEIC)');
-      return;
-    }
-
-    // Check file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size must be less than 10MB');
       return;
     }
 
@@ -563,7 +570,8 @@ export default function Home() {
         setUploading(false);
       }, 500);
     } catch (error) {
-      toast.error(error.message || 'Upload failed');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to upload your file. Please try again.');
       setUploadProgress(null);
       setUploading(false);
       console.error('Upload error:', error);
@@ -592,7 +600,8 @@ export default function Home() {
       );
       setDeleteDocModal({ isOpen: false, docId: null });
     } catch (error) {
-      toast.error(error.message || 'Delete failed');
+      // Error message is already user-friendly from api.js
+      toast.error(error.message || 'Unable to delete the document. Please try again.');
       console.error('Delete error:', error);
       setDeleteDocModal({ isOpen: false, docId: null });
     }
