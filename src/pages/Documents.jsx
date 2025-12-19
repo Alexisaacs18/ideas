@@ -179,7 +179,7 @@ export default function Documents() {
   const confirmDeleteDocument = async () => {
     const { docId } = deleteDocModal;
     try {
-      await api.deleteDocument(docId);
+      await api.deleteDocument(docId, userId);
       toast.success('Document deleted');
       await loadDocuments();
       setDeleteDocModal({ isOpen: false, docId: null });

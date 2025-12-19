@@ -194,47 +194,38 @@ export const api = {
 
   async getDocuments(userId) {
     try {
-      // Add cache-busting parameter to ensure fresh data from database
-      const url = `${API_BASE_URL}/api/documents?user_id=${userId}&_t=${Date.now()}`;
-      console.log('[api.getDocuments] Fetching documents for user:', userId);
+      if (!userId) return [];
       
-      const response = await fetch(url, {
-        cache: 'no-store', // Prevent browser caching
+      console.log('Fetching documents for user:', userId);
+      
+      const response = await fetch(`${API_BASE_URL}/api/documents?user_id=${userId}`, {
+        cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache'
         }
       });
       
       if (!response.ok) {
-        // If it's a 500 error, it might be a database issue, but we'll return empty array
-        if (response.status === 500) {
-          console.warn('[api.getDocuments] Database error fetching documents, returning empty array');
-          return [];
-        }
-        throw new Error('Unable to load your documents. Please try again.');
+        throw new Error(`HTTP ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('[api.getDocuments] Received data:', { 
-        count: data.count || data.documents?.length || 0,
-        documents: data.documents?.length || 0 
-      });
+      console.log('Received documents:', data);
       
-      return data.documents || [];
+      // Set the documents directly from API response (it's already an array)
+      return Array.isArray(data) ? data : [];
     } catch (error) {
-      console.error('[api.getDocuments] Error:', error);
-      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.name === 'TypeError') {
-        console.warn('[api.getDocuments] Network error fetching documents, returning empty array');
-        return [];
-      }
-      throw new Error('Unable to load your documents. Please try again.');
+      console.error('Failed to fetch documents:', error);
+      return [];
     }
   },
 
-  async deleteDocument(documentId) {
+  async deleteDocument(documentId, userId) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/documents/${documentId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId })
       });
       if (!response.ok) {
         let error;

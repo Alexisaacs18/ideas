@@ -1887,11 +1887,12 @@ async function handleGetDocuments(request, env) {
     
     if (!userId) {
       return new Response(
-        JSON.stringify({ error: 'user_id query parameter is required' }),
+        JSON.stringify({ error: 'Missing user_id' }),
         { 
           status: 400, 
           headers: { 
             'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
             'Pragma': 'no-cache',
             'Expires': '0'
@@ -1900,55 +1901,37 @@ async function handleGetDocuments(request, env) {
       );
     }
     
-    // Get documents from D1 database with all fields
-    const documents = await env.DB.prepare(
-      `SELECT 
-        id,
-        filename,
-        file_path,
-        encrypted,
-        upload_date,
-        size_bytes,
-        doc_type,
-        source_url
-      FROM documents 
-      WHERE user_id = ?
-      ORDER BY upload_date DESC`
+    console.log('Fetching documents for user:', userId);
+    
+    // Query D1 database - get ALL documents for this user
+    const result = await env.DB.prepare(
+      'SELECT * FROM documents WHERE user_id = ? ORDER BY upload_date DESC'
     ).bind(userId).all();
     
-    const results = documents.results || [];
-    
-    // Verify documents exist in R2 (optional check - can be slow for many docs)
-    // For now, we'll just return what's in the database
-    // The frontend will handle display
-    
-    console.log(`[handleGetDocuments] User ${userId}: Found ${results.length} documents in database`);
+    const documents = result.results || [];
+    console.log('Documents found:', documents.length);
     
     return new Response(
-      JSON.stringify({
-        documents: results,
-        count: results.length
-      }),
+      JSON.stringify(documents),
       { 
         status: 200, 
         headers: { 
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
           'Pragma': 'no-cache',
-          'Expires': '0',
-          'Access-Control-Allow-Origin': '*'
+          'Expires': '0'
         } 
       }
     );
   } catch (error) {
-    console.error('[handleGetDocuments] Error:', error);
+    console.error('Database error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: 'Database query failed' }),
       { 
         status: 500, 
         headers: { 
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
           'Access-Control-Allow-Origin': '*'
         } 
       }
@@ -2398,19 +2381,32 @@ async function handleDeleteDocument(request, env) {
     if (!documentId) {
       return new Response(
         JSON.stringify({ error: 'Document ID is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       );
     }
     
-    // Get document info
+    // Get user_id from request body
+    const body = await parseJSON(request);
+    const userId = body?.user_id;
+    
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: 'user_id is required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+    
+    console.log('Deleting document:', documentId, 'for user:', userId);
+    
+    // Get document info and verify it belongs to the user
     const document = await env.DB.prepare(
-      'SELECT file_path FROM documents WHERE id = ?'
-    ).bind(documentId).first();
+      'SELECT * FROM documents WHERE id = ? AND user_id = ?'
+    ).bind(documentId, userId).first();
     
     if (!document) {
       return new Response(
         JSON.stringify({ error: 'Document not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        { status: 404, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       );
     }
     
@@ -2440,14 +2436,16 @@ async function handleDeleteDocument(request, env) {
       'DELETE FROM embeddings WHERE document_id = ?'
     ).bind(documentId).run();
     
-    // Delete document
+    // Delete document record
     await env.DB.prepare(
       'DELETE FROM documents WHERE id = ?'
     ).bind(documentId).run();
     
+    console.log('Document deleted successfully');
+    
     return new Response(
-      JSON.stringify({ message: 'Document deleted successfully' }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true }),
+      { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
     );
   } catch (error) {
     return new Response(
