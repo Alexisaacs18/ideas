@@ -1229,8 +1229,8 @@ async function handleUpload(request, env) {
     
     // 2. Save document metadata (file_path points to encrypted file)
     await env.DB.prepare(
-      'INSERT INTO documents (id, user_id, filename, file_path, upload_date, size_bytes, doc_type) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(documentId, actualUserId, filename, encryptedFilePath, Math.floor(Date.now() / 1000), fileSize, 'file').run();
+      'INSERT INTO documents (id, user_id, filename, file_path, size_bytes) VALUES (?, ?, ?, ?, ?)'
+    ).bind(documentId, actualUserId, filename, encryptedFilePath, fileSize).run();
     
     // 4. Save embeddings WITHOUT chunk_text (only embedding vectors for search)
     const embeddingStatements = embeddings.map((emb) => {
