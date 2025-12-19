@@ -1414,6 +1414,32 @@ async function handleAdminStats(request, env) {
 
       totalChats += totalChatsForUser;
 
+      // Calculate last activity - check most recent message or document
+      let lastActivity = null;
+      
+      // Get most recent message timestamp
+      const lastMessage = await env.DB.prepare(
+        'SELECT created_at FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 1'
+      ).bind(userId).first();
+      
+      // Get most recent document upload timestamp
+      const lastDocument = await env.DB.prepare(
+        'SELECT upload_date FROM documents WHERE user_id = ? ORDER BY upload_date DESC LIMIT 1'
+      ).bind(userId).first();
+      
+      // Get the most recent activity (messages.created_at and documents.upload_date are both unix timestamps in seconds)
+      const messageTimestamp = lastMessage?.created_at ? parseInt(lastMessage.created_at) : null;
+      const documentTimestamp = lastDocument?.upload_date ? parseInt(lastDocument.upload_date) : null;
+      
+      if (messageTimestamp || documentTimestamp) {
+        // Take the maximum (most recent) timestamp
+        if (messageTimestamp && documentTimestamp) {
+          lastActivity = Math.max(messageTimestamp, documentTimestamp);
+        } else {
+          lastActivity = messageTimestamp || documentTimestamp;
+        }
+      }
+
       // Determine if signed in or anonymous
       const isSignedIn = email && !email.endsWith('@temp.local');
 
@@ -1429,6 +1455,7 @@ async function handleAdminStats(request, env) {
         documentCount,
         totalChats: totalChatsForUser,
         averageChatsPerDay,
+        lastActivity, // Unix timestamp in seconds
       });
     }
 

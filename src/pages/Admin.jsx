@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const ADMIN_PASSWORD = 'S3ahawk-1845!';
@@ -151,6 +151,31 @@ export default function Admin() {
     }
   };
 
+  // Format last activity timestamp
+  const formatLastActivity = (timestamp) => {
+    if (!timestamp) return 'Never';
+    
+    // timestamp is in seconds (unix timestamp), convert to milliseconds
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    // For older dates, show formatted date
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+  };
+
   // Filter, sort, and search users
   const filteredAndSortedUsers = useMemo(() => {
     if (!stats?.users) return [];
@@ -199,6 +224,10 @@ export default function Admin() {
         case 'email':
           aValue = (a.email || a.user_id || '').toLowerCase();
           bValue = (b.email || b.user_id || '').toLowerCase();
+          break;
+        case 'lastActivity':
+          aValue = a.lastActivity || 0;
+          bValue = b.lastActivity || 0;
           break;
         default:
           return 0;
@@ -481,6 +510,15 @@ export default function Admin() {
                           {getSortIcon('status')}
                         </div>
                       </th>
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider cursor-pointer hover:bg-background/30 transition-colors"
+                        onClick={() => handleSort('lastActivity')}
+                      >
+                        <div className="flex items-center">
+                          Last Activity
+                          {getSortIcon('lastActivity')}
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
@@ -521,11 +559,19 @@ export default function Admin() {
                               {user.email ? 'Signed In' : 'Anonymous'}
                             </span>
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-3 h-3 text-text-secondary/60" />
+                              <span className="text-sm text-text-primary">
+                                {formatLastActivity(user.lastActivity)}
+                              </span>
+                            </div>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="5" className="px-6 py-12 text-center">
+                        <td colSpan="6" className="px-6 py-12 text-center">
                           <p className="text-text-secondary">
                             {searchQuery || filterStatus !== 'all' 
                               ? 'No users match your filters' 
@@ -563,6 +609,11 @@ export default function Admin() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-semibold text-text-secondary">
                           {stats?.totals?.signedInUsers ?? 0} signed in, {stats?.totals?.anonymousUsers ?? 0} anonymous
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm font-semibold text-text-secondary">
+                          —
                         </span>
                       </td>
                     </tr>
