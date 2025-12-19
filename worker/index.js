@@ -998,6 +998,76 @@ async function handleUpload(request, env) {
         JSON.stringify({ 
           error: 'HuggingFace API key not configured. Please verify HUGGINGFACE secret is set in Cloudflare dashboard for worker "hidden-grass-22b6".',
           debug: 'Secret not found in environment',
+
+    // Validate URL
+    try {
+      new URL(linkUrl);
+    } catch (e) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid URL format' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check document limit
+    const docCount = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM documents WHERE user_id = ?'
+    ).bind(userId).first();
+    
+    if (docCount && docCount.count >= 50) {
+      return new Response(
+        JSON.stringify({ error: 'Document limit reached (50 documents per user)' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('=== LINK PROCESSING ===');
+    console.log('Fetching URL:', linkUrl);
+
+    // Fetch the webpage
+    const response = await fetch(linkUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DocumentBot/1.0)',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    console.log('HTML fetched, length:', html.length);
+
+    // Extract text from HTML (basic version)
+    let text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    console.log('Extracted text length:', text.length);
+
+    // Get title from HTML
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : new URL(linkUrl).hostname;
+
+    if (text.length < 100) {
+      return new Response(
+        JSON.stringify({ error: 'Could not extract enough text from URL. The page may require JavaScript or be behind authentication.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Chunk text
+    const chunks = chunkText(text, 1500, 100);
+    
+    if (chunks.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No text chunks created from URL' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
           availableKeys: Object.keys(env).filter(k => k.includes('HUGGING') || k.includes('API') || k.includes('Hugging'))
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -1885,7 +1955,12 @@ async function handleGetDocuments(request, env) {
     const url = new URL(request.url);
     const userId = url.searchParams.get('user_id');
     
+    console.log('=== GET DOCUMENTS DEBUG ===');
+    console.log('Full URL:', request.url);
+    console.log('userId from query:', userId);
+    
     if (!userId) {
+      console.error('No userId provided');
       return new Response(
         JSON.stringify({ error: 'Missing user_id' }),
         { 
@@ -1893,23 +1968,30 @@ async function handleGetDocuments(request, env) {
           headers: { 
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'Pragma': 'no-cache',
-            'Expires': '0'
           } 
         }
       );
     }
     
-    console.log('Fetching documents for user:', userId);
+    console.log('Querying database for user:', userId);
     
-    // Query D1 database - get ALL documents for this user
+    // Query D1 database
     const result = await env.DB.prepare(
       'SELECT * FROM documents WHERE user_id = ? ORDER BY upload_date DESC'
     ).bind(userId).all();
     
+    console.log('Query result:', {
+      success: !!result,
+      hasResults: !!result.results,
+      count: result.results?.length || 0
+    });
+    
+    if (result.results && result.results.length > 0) {
+      console.log('First document:', result.results[0]);
+    }
+    
     const documents = result.results || [];
-    console.log('Documents found:', documents.length);
+    console.log('Returning documents:', documents.length);
     
     return new Response(
       JSON.stringify(documents),
@@ -1918,16 +2000,15 @@ async function handleGetDocuments(request, env) {
         headers: { 
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-          'Pragma': 'no-cache',
-          'Expires': '0'
+          'Cache-Control': 'no-store'
         } 
       }
     );
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('GET DOCUMENTS ERROR:', error);
+    console.error('Error stack:', error.stack);
     return new Response(
-      JSON.stringify({ error: 'Database query failed' }),
+      JSON.stringify({ error: 'Database query failed', details: error.message }),
       { 
         status: 500, 
         headers: { 
@@ -1993,76 +2074,6 @@ async function handleAddLink(request, env) {
           throw error;
         }
       }
-    }
-
-    // Validate URL
-    try {
-      new URL(linkUrl);
-    } catch (e) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid URL format' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Check document limit
-    const docCount = await env.DB.prepare(
-      'SELECT COUNT(*) as count FROM documents WHERE user_id = ?'
-    ).bind(userId).first();
-    
-    if (docCount && docCount.count >= 50) {
-      return new Response(
-        JSON.stringify({ error: 'Document limit reached (50 documents per user)' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('=== LINK PROCESSING ===');
-    console.log('Fetching URL:', linkUrl);
-
-    // Fetch the webpage
-    const response = await fetch(linkUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; DocumentBot/1.0)',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
-    }
-
-    const html = await response.text();
-    console.log('HTML fetched, length:', html.length);
-
-    // Extract text from HTML (basic version)
-    let text = html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    console.log('Extracted text length:', text.length);
-
-    // Get title from HTML
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const title = titleMatch ? titleMatch[1].trim() : new URL(linkUrl).hostname;
-
-    if (text.length < 100) {
-      return new Response(
-        JSON.stringify({ error: 'Could not extract enough text from URL. The page may require JavaScript or be behind authentication.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Chunk text
-    const chunks = chunkText(text, 1500, 100);
-    
-    if (chunks.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'No text chunks created from URL' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
     }
 
     // Enforce maximum chunk limit
