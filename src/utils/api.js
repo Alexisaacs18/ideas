@@ -195,22 +195,36 @@ export const api = {
   async getDocuments(userId) {
     try {
       // Add cache-busting parameter to ensure fresh data from database
-      const response = await fetch(`${API_BASE_URL}/api/documents?user_id=${userId}&_t=${Date.now()}`, {
+      const url = `${API_BASE_URL}/api/documents?user_id=${userId}&_t=${Date.now()}`;
+      console.log('[api.getDocuments] Fetching documents for user:', userId);
+      
+      const response = await fetch(url, {
         cache: 'no-store', // Prevent browser caching
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
       });
+      
       if (!response.ok) {
         // If it's a 500 error, it might be a database issue, but we'll return empty array
         if (response.status === 500) {
-          console.warn('Database error fetching documents, returning empty array');
+          console.warn('[api.getDocuments] Database error fetching documents, returning empty array');
           return [];
         }
         throw new Error('Unable to load your documents. Please try again.');
       }
+      
       const data = await response.json();
+      console.log('[api.getDocuments] Received data:', { 
+        count: data.count || data.documents?.length || 0,
+        documents: data.documents?.length || 0 
+      });
+      
       return data.documents || [];
     } catch (error) {
+      console.error('[api.getDocuments] Error:', error);
       if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.name === 'TypeError') {
-        console.warn('Network error fetching documents, returning empty array');
+        console.warn('[api.getDocuments] Network error fetching documents, returning empty array');
         return [];
       }
       throw new Error('Unable to load your documents. Please try again.');

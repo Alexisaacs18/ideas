@@ -1472,6 +1472,11 @@ async function handleAdminStats(request, env) {
     let signedInUsers = 0;
     let anonymousUsers = 0;
     let activeUsers = 0; // Users active in the last 30 days
+    
+    // Verify total document count directly from database
+    const totalDocsQuery = await env.DB.prepare('SELECT COUNT(*) as count FROM documents').first();
+    const actualTotalDocuments = totalDocsQuery?.count || 0;
+    console.log(`[AdminStats] Direct database query: ${actualTotalDocuments} total documents`);
 
     // Calculate stats for each user
     for (const user of allUsers.results) {
@@ -1484,6 +1489,11 @@ async function handleAdminStats(request, env) {
       ).bind(userId).first();
       const documentCount = docCount?.count || 0;
       totalDocuments += documentCount;
+      
+      // Log for debugging
+      if (documentCount > 0) {
+        console.log(`[AdminStats] User ${userId} (${email}): ${documentCount} documents`);
+      }
 
       // Count total messages (as proxy for chats since we don't track separate chat sessions)
       const messageCount = await env.DB.prepare(
@@ -1593,15 +1603,23 @@ async function handleAdminStats(request, env) {
       ? users.reduce((sum, u) => sum + u.averageChatsPerDay, 0) / users.length 
       : 0;
 
+    // Use the actual count from database instead of sum
     const totals = {
       totalUsers: allUsers.results.length,
       signedInUsers,
       anonymousUsers,
       activeUsers, // Users active in the last 30 days
-      totalDocuments,
+      totalDocuments: actualTotalDocuments, // Use direct database count instead of sum
       totalChats,
       averageChatsPerDay: overallAverageChatsPerDay,
     };
+    
+    console.log(`[AdminStats] Final totals:`, {
+      totalUsers: totals.totalUsers,
+      totalDocuments: totals.totalDocuments,
+      calculatedSum: totalDocuments, // What we calculated by summing
+      actualCount: actualTotalDocuments // What database says
+    });
 
     return new Response(
       JSON.stringify({ users, totals }),
@@ -1870,17 +1888,46 @@ async function handleGetDocuments(request, env) {
     if (!userId) {
       return new Response(
         JSON.stringify({ error: 'user_id query parameter is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 400, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          } 
+        }
       );
     }
     
+    // Get documents from D1 database with all fields
     const documents = await env.DB.prepare(
-      'SELECT id, filename, upload_date, size_bytes, doc_type, source_url FROM documents WHERE user_id = ? ORDER BY upload_date DESC'
+      `SELECT 
+        id,
+        filename,
+        file_path,
+        encrypted,
+        upload_date,
+        size_bytes,
+        doc_type,
+        source_url
+      FROM documents 
+      WHERE user_id = ?
+      ORDER BY upload_date DESC`
     ).bind(userId).all();
+    
+    const results = documents.results || [];
+    
+    // Verify documents exist in R2 (optional check - can be slow for many docs)
+    // For now, we'll just return what's in the database
+    // The frontend will handle display
+    
+    console.log(`[handleGetDocuments] User ${userId}: Found ${results.length} documents in database`);
     
     return new Response(
       JSON.stringify({
-        documents: documents.results || [],
+        documents: results,
+        count: results.length
       }),
       { 
         status: 200, 
@@ -1888,14 +1935,23 @@ async function handleGetDocuments(request, env) {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
           'Pragma': 'no-cache',
-          'Expires': '0'
+          'Expires': '0',
+          'Access-Control-Allow-Origin': '*'
         } 
       }
     );
   } catch (error) {
+    console.error('[handleGetDocuments] Error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 500, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'Access-Control-Allow-Origin': '*'
+        } 
+      }
     );
   }
 }
@@ -2594,6 +2650,66 @@ export default {
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
+      } else if (path === '/api/debug/documents' && request.method === 'GET') {
+        // Debug endpoint to see all documents in database
+        try {
+          const allDocs = await env.DB.prepare('SELECT * FROM documents ORDER BY upload_date DESC').all();
+          const totalCount = await env.DB.prepare('SELECT COUNT(*) as count FROM documents').first();
+          
+          response = new Response(
+            JSON.stringify({
+              total_count: totalCount?.count || 0,
+              documents: allDocs.results || [],
+              by_user: {}
+            }, null, 2),
+            { 
+              status: 200, 
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              } 
+            }
+          );
+          
+          // Also group by user_id for easier debugging
+          if (allDocs.results) {
+            const byUser = {};
+            for (const doc of allDocs.results) {
+              if (!byUser[doc.user_id]) {
+                byUser[doc.user_id] = [];
+              }
+              byUser[doc.user_id].push({
+                id: doc.id,
+                filename: doc.filename,
+                upload_date: doc.upload_date
+              });
+            }
+            const responseData = {
+              total_count: totalCount?.count || 0,
+              documents: allDocs.results || [],
+              by_user: byUser,
+              user_counts: Object.keys(byUser).reduce((acc, userId) => {
+                acc[userId] = byUser[userId].length;
+                return acc;
+              }, {})
+            };
+            response = new Response(
+              JSON.stringify(responseData, null, 2),
+              { 
+                status: 200, 
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                } 
+              }
+            );
+          }
+        } catch (error) {
+          response = new Response(
+            JSON.stringify({ error: error.message }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
       } else if (path === '/api/debug/bindings' && request.method === 'GET') {
         // Debug endpoint to check bindings
         response = new Response(
@@ -2623,6 +2739,7 @@ export default {
               'DELETE /api/documents/:id': 'Delete a document',
               'GET /api/debug/secret': 'Debug: Check API key (dev only)',
               'GET /api/debug/bindings': 'Debug: Check bindings (dev only)',
+              'GET /api/debug/documents': 'Debug: List all documents in database',
             },
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
