@@ -1,11 +1,12 @@
-# Public Worker - handles public site and API (everything except /admin*)
-name = "hidden-grass-22b6"
-main = "worker/public-worker.js"
+# Admin Worker - handles /admin* routes
+# Shares the same D1 and R2 bindings as the main worker
+name = "hidden-grass-22b6-admin"
+main = "worker/admin-worker.js"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
 [assets]
-directory = "./dist/public"
+directory = "./dist/admin"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
@@ -23,7 +24,8 @@ invocation_logs = true
 enabled = false
 persist = true
 head_sampling_rate = 1
- 
+
+# Admin worker shares the same D1 and R2 bindings as main worker
 [[d1_databases]]
 binding = "DB"
 database_name = "second_brain_db"
@@ -33,9 +35,10 @@ database_id = "d2795c23-5672-49b2-9780-bc0613284565"
 binding = "DOCS_BUCKET"
 bucket_name = "second-brain-docs"
 
-# Routes: Public worker handles everything EXCEPT /admin*
-# Note: More specific /admin* route must be configured in Cloudflare Dashboard
-# to route to admin-worker. This worker handles all other paths.
+# Routes: Admin worker handles ONLY /admin*
+# This more specific route must be configured in Cloudflare Dashboard
+# BEFORE the catch-all route for the public worker.
 # routes = [
-#   { pattern = "*", custom_domain = false }
+#   { pattern = "*/admin*", custom_domain = false }
 # ]
+

@@ -194,38 +194,29 @@ export const api = {
 
   async getDocuments(userId) {
     try {
+      if (!userId) return [];
+      
+      console.log('Fetching documents for user:', userId);
+      
       const response = await fetch(`${API_BASE_URL}/api/documents?user_id=${userId}`, {
-        method: 'GET',
-        headers: {},
-        cache: 'default',
-      });
-      if (!response.ok) {
-        // If it's a 500 error, it might be a database issue, but we'll return empty array
-        if (response.status === 500) {
-          console.warn('Database error fetching documents, returning empty array');
-          return [];
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
         }
-        throw new Error('Unable to load your documents. Please try again.');
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
+      
       const data = await response.json();
-      // Handle multiple response formats:
-      // 1. Array directly: [...]
-      // 2. Object with documents: { documents: [...] }
-      // 3. Object with documents and count: { documents: [...], count: N }
-      if (Array.isArray(data)) {
-        return data;
-      } else if (data && Array.isArray(data.documents)) {
-        return data.documents;
-      } else if (data && data.results && Array.isArray(data.results)) {
-        return data.results;
-      }
-      return [];
+      console.log('Received documents:', data);
+      
+      // Set the documents directly from API response (it's already an array)
+      return Array.isArray(data) ? data : [];
     } catch (error) {
-      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.name === 'TypeError') {
-        console.warn('Network error fetching documents, returning empty array');
-        return [];
-      }
-      throw new Error('Unable to load your documents. Please try again.');
+      console.error('Failed to fetch documents:', error);
+      return [];
     }
   },
 

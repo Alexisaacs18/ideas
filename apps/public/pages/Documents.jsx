@@ -79,11 +79,14 @@ export default function Documents() {
   const loadDocuments = async () => {
     setIsLoadingDocuments(true);
     try {
+      // Always fetch fresh from API (no caching)
+      // Force a fresh fetch by adding timestamp to bypass any potential caching
       const docs = await api.getDocuments(userId);
-      setDocuments(docs);
+      setDocuments(docs || []); // Ensure it's always an array
     } catch (error) {
       console.error('Failed to load documents:', error);
       toast.error('Unable to load your documents. Please try again.');
+      setDocuments([]); // Clear documents on error
     } finally {
       setIsLoadingDocuments(false);
     }

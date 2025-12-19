@@ -10,7 +10,7 @@ import { HfInference } from '@huggingface/inference';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*', // Allow all origins for production
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 // Utility: Generate UUID
@@ -1458,7 +1458,7 @@ async function handleAdminStats(request, env) {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           } 
         }
       );
@@ -1629,7 +1629,7 @@ async function handleAdminStats(request, env) {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         } 
       }
     );
@@ -1644,7 +1644,7 @@ async function handleAdminStats(request, env) {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         } 
       }
     );

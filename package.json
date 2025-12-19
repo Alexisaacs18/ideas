@@ -4,17 +4,19 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
+		"dev": "vite --config vite.config.public.js",
+		"dev:admin": "vite --config vite.config.admin.js",
 		"dev:worker": "wrangler dev",
-		"dev:full": "npm run build:pages && wrangler dev",
-		"build": "npm run copy-logo && vite build",
-		"build:worker": "npm run copy-logo && vite build --config vite.config.js",
-		"build:pages": "npm run copy-logo && vite build --config vite.config.pages.js",
-		"copy-logo": "cp logo.svg public/logo.svg || true",
+		"dev:worker:admin": "wrangler dev --config wrangler.admin.toml",
+		"build": "npm run build:public && npm run build:admin",
+		"build:public": "npm run copy-logo && vite build --config vite.config.public.js",
+		"build:admin": "npm run copy-logo && vite build --config vite.config.admin.js",
+		"copy-logo": "cp logo.svg apps/public/logo.svg && cp logo.svg apps/admin/logo.svg || true",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
-		"deploy": "npm run build:worker && wrangler deploy",
-		"deploy:pages": "npm run build:pages"
+		"deploy": "npm run build:public && wrangler deploy",
+		"deploy:admin": "npm run build:admin && wrangler deploy --config wrangler.admin.toml",
+		"deploy:all": "npm run build && wrangler deploy && wrangler deploy --config wrangler.admin.toml"
 	},
 	"dependencies": {
 		"@huggingface/inference": "^4.13.5",
