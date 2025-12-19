@@ -2611,10 +2611,19 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     
+    console.log('=== REQUEST DEBUG ===');
+    console.log('Method:', request.method);
+    console.log('Path:', path);
+    console.log('Full URL:', request.url);
+    
     try {
       let response;
       
-      if (path === '/api/auth/signup' && request.method === 'POST') {
+      // IMPORTANT: Check /api/documents GET before other document routes
+      if (path === '/api/documents' && request.method === 'GET') {
+        console.log('✅ Matched GET /api/documents route');
+        response = await handleGetDocuments(request, env);
+      } else if (path === '/api/auth/signup' && request.method === 'POST') {
         response = await handleSignup(request, env);
       } else if (path === '/api/auth/login' && request.method === 'POST') {
         response = await handleLogin(request, env);
@@ -2626,8 +2635,6 @@ export default {
         response = await handleUpload(request, env);
       } else if (path === '/api/chat' && request.method === 'POST') {
         response = await handleChat(request, env);
-      } else if (path === '/api/documents' && request.method === 'GET') {
-        response = await handleGetDocuments(request, env);
       } else if (path === '/api/documents/link' && request.method === 'POST') {
         response = await handleAddLink(request, env);
       } else if (path === '/api/documents/text' && request.method === 'POST') {
@@ -2792,9 +2799,19 @@ export default {
         return Response.redirect(new URL('/index.html', request.url), 302);
       }
       
+      // If no route matched, return 404
+      if (!response) {
+        console.log('❌ No route matched for:', path, request.method);
+        response = new Response(
+          JSON.stringify({ error: 'Not found' }),
+          { status: 404, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      
       return addCorsHeaders(response);
     } catch (error) {
       console.error('Unhandled error:', error);
+      console.error('Error stack:', error.stack);
       return addCorsHeaders(
         new Response(
           JSON.stringify({ error: 'Internal server error' }),
