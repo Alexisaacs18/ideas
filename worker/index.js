@@ -1204,19 +1204,18 @@ async function handleUpload(request, env) {
     
     // Generate document ID
     const documentId = generateId();
-    const filePath = `${actualUserId}/${documentId}/${filename}`;
-    const encryptedTextPath = `${actualUserId}/${documentId}/encrypted.txt`;
+    const encryptedFilePath = `${documentId}.enc`;
     
-    // 1. Encrypt and store full text in R2
+    // 1. Encrypt and store ONLY encrypted text in R2 (no original file)
     try {
       const encryptedText = await encryptText(text, actualUserId, env);
       const encryptedBuffer = new TextEncoder().encode(encryptedText);
-      await env.DOCS_BUCKET.put(encryptedTextPath, encryptedBuffer, {
+      await env.DOCS_BUCKET.put(encryptedFilePath, encryptedBuffer, {
         httpMetadata: {
           contentType: 'text/plain',
         },
       });
-      console.log('✅ Encrypted text stored in R2');
+      console.log('✅ Encrypted text stored in R2 (original file not stored)');
     } catch (error) {
       console.error('Error encrypting text:', error);
       return new Response(
@@ -1228,18 +1227,10 @@ async function handleUpload(request, env) {
       );
     }
     
-    // 2. Store original file in R2 (for reference, but encrypted text is the source of truth)
-    const fileBuffer = await file.arrayBuffer();
-    await env.DOCS_BUCKET.put(filePath, fileBuffer, {
-      httpMetadata: {
-        contentType: file.type || 'application/octet-stream',
-      },
-    });
-    
-    // 3. Save document metadata
+    // 2. Save document metadata (file_path points to encrypted file)
     await env.DB.prepare(
       'INSERT INTO documents (id, user_id, filename, file_path, size_bytes) VALUES (?, ?, ?, ?, ?)'
-    ).bind(documentId, actualUserId, filename, filePath, fileSize).run();
+    ).bind(documentId, actualUserId, filename, encryptedFilePath, fileSize).run();
     
     // 4. Save embeddings WITHOUT chunk_text (only embedding vectors for search)
     const embeddingStatements = embeddings.map((emb) => {
@@ -1779,13 +1770,22 @@ async function handleChat(request, env) {
       } else {
         // Retrieve encrypted text from R2
         try {
-          // Construct path to encrypted text: user_id/document_id/encrypted.txt
-          const pathParts = chunk.file_path.split('/');
-          const encryptedTextPath = `${pathParts[0]}/${pathParts[1]}/encrypted.txt`;
+          // Use file_path directly (now stored as docId.enc)
+          // Support both old format (user_id/document_id/encrypted.txt) and new format (docId.enc)
+          let encryptedTextPath = chunk.file_path;
+          
+          // If old format, convert to new format
+          if (encryptedTextPath.includes('/')) {
+            const pathParts = encryptedTextPath.split('/');
+            if (pathParts.length >= 2) {
+              // Old format: user_id/document_id/encrypted.txt -> documentId.enc
+              encryptedTextPath = `${pathParts[1]}.enc`;
+            }
+          }
           
           const encryptedObject = await env.DOCS_BUCKET.get(encryptedTextPath);
           if (!encryptedObject) {
-            console.warn(`Encrypted text not found for document ${chunk.document_id}`);
+            console.warn(`Encrypted file not found: ${encryptedTextPath} for document ${chunk.document_id}`);
             continue;
           }
           
@@ -2067,19 +2067,18 @@ async function handleAddLink(request, env) {
 
     // Store document
     const documentId = generateId();
-    const filePath = `${userId}/${documentId}/${title}.txt`;
-    const encryptedTextPath = `${userId}/${documentId}/encrypted.txt`;
+    const encryptedFilePath = `${documentId}.enc`;
     
-    // 1. Encrypt and store full text in R2
+    // 1. Encrypt and store ONLY encrypted text in R2 (no original file)
     try {
       const encryptedText = await encryptText(text, userId, env);
       const encryptedBuffer = new TextEncoder().encode(encryptedText);
-      await env.DOCS_BUCKET.put(encryptedTextPath, encryptedBuffer, {
+      await env.DOCS_BUCKET.put(encryptedFilePath, encryptedBuffer, {
         httpMetadata: {
           contentType: 'text/plain',
         },
       });
-      console.log('✅ Encrypted text stored in R2 for link');
+      console.log('✅ Encrypted text stored in R2 for link (original not stored)');
     } catch (error) {
       console.error('Error encrypting link text:', error);
       return new Response(
@@ -2097,7 +2096,7 @@ async function handleAddLink(request, env) {
       documentId,
       userId,
       title,
-      filePath,
+      encryptedFilePath,
       Math.floor(Date.now() / 1000),
       text.length,
       'link',
@@ -2263,19 +2262,18 @@ async function handleAddText(request, env) {
     // Store document
     const documentId = generateId();
     const docTitle = title || 'Untitled note';
-    const filePath = `${userId}/${documentId}/${docTitle}.txt`;
-    const encryptedTextPath = `${userId}/${documentId}/encrypted.txt`;
+    const encryptedFilePath = `${documentId}.enc`;
     
-    // 1. Encrypt and store full text in R2
+    // 1. Encrypt and store ONLY encrypted text in R2 (no original file)
     try {
       const encryptedText = await encryptText(content, userId, env);
       const encryptedBuffer = new TextEncoder().encode(encryptedText);
-      await env.DOCS_BUCKET.put(encryptedTextPath, encryptedBuffer, {
+      await env.DOCS_BUCKET.put(encryptedFilePath, encryptedBuffer, {
         httpMetadata: {
           contentType: 'text/plain',
         },
       });
-      console.log('✅ Encrypted text stored in R2 for text snippet');
+      console.log('✅ Encrypted text stored in R2 for text snippet (original not stored)');
     } catch (error) {
       console.error('Error encrypting text snippet:', error);
       return new Response(
@@ -2293,7 +2291,7 @@ async function handleAddText(request, env) {
       documentId,
       userId,
       docTitle,
-      filePath,
+      encryptedFilePath,
       Math.floor(Date.now() / 1000),
       content.length,
       'text'
@@ -2352,18 +2350,20 @@ async function handleDeleteDocument(request, env) {
       );
     }
     
-    // Delete from R2 - delete both the original file and encrypted.txt
+    // Delete from R2 - file_path now points directly to encrypted file
     try {
       await env.DOCS_BUCKET.delete(document.file_path);
       
-      // Also delete encrypted.txt if it exists
+      // Also try to delete old format files if they exist (backward compatibility)
       const pathParts = document.file_path.split('/');
-      if (pathParts.length >= 2) {
-        const encryptedPath = `${pathParts[0]}/${pathParts[1]}/encrypted.txt`;
+      if (pathParts.length >= 2 && !document.file_path.endsWith('.enc')) {
+        // Old format: try to delete both original and encrypted.txt
         try {
+          await env.DOCS_BUCKET.delete(document.file_path);
+          const encryptedPath = `${pathParts[0]}/${pathParts[1]}/encrypted.txt`;
           await env.DOCS_BUCKET.delete(encryptedPath);
         } catch (e) {
-          // Ignore if encrypted.txt doesn't exist (old documents)
+          // Ignore if old format files don't exist
         }
       }
     } catch (error) {
@@ -2421,18 +2421,20 @@ async function handleDeleteUser(request, env) {
     if (documents.results && documents.results.length > 0) {
       for (const doc of documents.results) {
         try {
-          // Delete original file
+          // Delete encrypted file (file_path now points directly to .enc file)
           await env.DOCS_BUCKET.delete(doc.file_path);
           deletedFiles++;
           
-          // Also delete encrypted.txt
+          // Also try to delete old format files if they exist (backward compatibility)
           const pathParts = doc.file_path.split('/');
-          if (pathParts.length >= 2) {
-            const encryptedPath = `${pathParts[0]}/${pathParts[1]}/encrypted.txt`;
+          if (pathParts.length >= 2 && !doc.file_path.endsWith('.enc')) {
+            // Old format: try to delete both original and encrypted.txt
             try {
+              await env.DOCS_BUCKET.delete(doc.file_path);
+              const encryptedPath = `${pathParts[0]}/${pathParts[1]}/encrypted.txt`;
               await env.DOCS_BUCKET.delete(encryptedPath);
             } catch (e) {
-              // Ignore if encrypted.txt doesn't exist
+              // Ignore if old format files don't exist
             }
           }
         } catch (error) {

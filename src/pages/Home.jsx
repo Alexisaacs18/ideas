@@ -78,11 +78,12 @@ export default function Home() {
 
   const loadDocuments = async () => {
     try {
+      // Always fetch fresh from API (no caching)
       const docs = await api.getDocuments(userId);
-      setDocuments(docs);
+      setDocuments(docs || []); // Ensure it's always an array
     } catch (error) {
       console.error('Failed to load documents:', error);
-      setDocuments([]);
+      setDocuments([]); // Clear documents on error
     }
   };
 

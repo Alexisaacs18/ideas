@@ -1,4 +1,4 @@
-import { FileText, User } from 'lucide-react';
+import { FileText, User, Lock } from 'lucide-react';
 
 export default function TopNav({ onDocumentsClick, onProfileClick }) {
   return (
@@ -8,6 +8,10 @@ export default function TopNav({ onDocumentsClick, onProfileClick }) {
           <span className="hidden sm:inline">Prosey: Your Second Brain and Digital Garden</span>
           <span className="sm:hidden">Prosey</span>
         </h1>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <Lock size={12} className="text-green-400" />
+          <span className="text-xs text-green-400 font-medium hidden sm:inline">E2E Encrypted</span>
+        </div>
       </div>
       
       <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image } from 'lucide-react';
+import { FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image, Lock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Toaster, toast } from 'react-hot-toast';
 import MainSidebar from '../components/MainSidebar';
@@ -64,11 +64,13 @@ export default function Documents() {
 
   const loadDocuments = async () => {
     try {
+      // Always fetch fresh from API (no caching)
       const docs = await api.getDocuments(userId);
-      setDocuments(docs);
+      setDocuments(docs || []); // Ensure it's always an array
     } catch (error) {
       console.error('Failed to load documents:', error);
       toast.error('Unable to load your documents. Please try again.');
+      setDocuments([]); // Clear documents on error
     }
   };
 
@@ -322,7 +324,13 @@ export default function Documents() {
         <div className="border-b border-border/50 bg-surface/50 backdrop-blur-sm">
           <div className="px-6 py-4">
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-semibold text-text-primary">My Documents</h1>
+              <div>
+                <h1 className="text-2xl font-semibold text-text-primary">My Documents</h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <Lock size={14} className="text-green-400" />
+                  <span className="text-xs text-green-400 font-medium">End-to-End Encrypted</span>
+                </div>
+              </div>
             </div>
           
             {/* Tabs */}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Clock, Trash2, AlertTriangle } from 'lucide-react';
+import { Lock, Loader2, LogOut, Users, FileText, MessageSquare, TrendingUp, Shield, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Clock, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../utils/api';
 
@@ -21,7 +21,11 @@ export default function Admin() {
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'signedIn', 'anonymous'
   const [deletingUserId, setDeletingUserId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
-  const [clearingR2, setClearingR2] = useState(false);
+  const [hiddenUsers, setHiddenUsers] = useState(() => {
+    // Load hidden users from localStorage
+    const stored = localStorage.getItem('admin_hidden_users');
+    return stored ? JSON.parse(stored) : [];
+  });
 
   // Check authentication on mount
   useEffect(() => {
@@ -244,6 +248,9 @@ export default function Admin() {
     if (!stats?.users) return [];
 
     let filtered = [...stats.users];
+    
+    // Filter out hidden users
+    filtered = filtered.filter(user => !hiddenUsers.includes(user.user_id));
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -308,7 +315,7 @@ export default function Admin() {
     });
 
     return filtered;
-  }, [stats?.users, searchQuery, filterStatus, sortBy, sortOrder]);
+  }, [stats?.users, searchQuery, filterStatus, sortBy, sortOrder, hiddenUsers]);
 
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -330,6 +337,14 @@ export default function Admin() {
       : <ArrowDown className="w-3 h-3 ml-1 text-indigo-400" />;
   };
 
+  const handleHideUser = (userId) => {
+    // Hide user from admin view (doesn't delete from platform)
+    const newHiddenUsers = [...hiddenUsers, userId];
+    setHiddenUsers(newHiddenUsers);
+    localStorage.setItem('admin_hidden_users', JSON.stringify(newHiddenUsers));
+    toast.success('User hidden from admin dashboard');
+  };
+
   const handleDeleteUser = async (userId) => {
     if (showDeleteConfirm !== userId) {
       setShowDeleteConfirm(userId);
@@ -341,6 +356,10 @@ export default function Admin() {
       const result = await api.deleteUser(userId);
       toast.success(`User deleted successfully. ${result.deletedDocuments} documents and ${result.deletedFiles} files removed.`);
       setShowDeleteConfirm(null);
+      // Remove from hidden list if it was there
+      const newHiddenUsers = hiddenUsers.filter(id => id !== userId);
+      setHiddenUsers(newHiddenUsers);
+      localStorage.setItem('admin_hidden_users', JSON.stringify(newHiddenUsers));
       // Reload stats
       await loadStats();
     } catch (error) {
@@ -351,21 +370,6 @@ export default function Admin() {
     }
   };
 
-  const handleClearR2Documents = async () => {
-    if (!window.confirm('⚠️ WARNING: This will delete ALL documents from R2 storage. This action is IRREVERSIBLE!\n\nAre you sure you want to continue?')) {
-      return;
-    }
-
-    setClearingR2(true);
-    try {
-      const result = await api.clearR2Documents();
-      toast.success(`R2 cleared: ${result.deletedCount} files deleted.`);
-    } catch (error) {
-      toast.error(error.message || 'Failed to clear R2 documents');
-    } finally {
-      setClearingR2(false);
-    }
-  };
 
 
   if (isLoading) {
@@ -447,19 +451,17 @@ export default function Admin() {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={handleClearR2Documents}
-                disabled={clearingR2}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={loadStats}
+                disabled={isLoadingStats}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh data from database"
               >
-                {clearingR2 ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    <span>Clearing...</span>
-                  </>
+                {isLoadingStats ? (
+                  <Loader2 size={18} className="animate-spin" />
                 ) : (
                   <>
-                    <Trash2 size={18} />
-                    <span>Clear R2 Documents</span>
+                    <Search size={18} />
+                    <span>Refresh</span>
                   </>
                 )}
               </button>
@@ -542,6 +544,11 @@ export default function Admin() {
                     <h2 className="text-xl font-semibold text-text-primary">Users</h2>
                     <p className="text-sm text-text-secondary mt-1">
                       {filteredAndSortedUsers.length} of {stats?.users?.length ?? 0} user records
+                      {hiddenUsers.length > 0 && (
+                        <span className="ml-2 text-xs text-amber-400">
+                          ({hiddenUsers.length} hidden)
+                        </span>
+                      )}
                       {stats?.totals && (
                         <span className="ml-2 text-xs text-text-secondary/60">
                           ({stats.totals.signedInUsers} signed-in users, {stats.totals.anonymousUsers} anonymous sessions)
@@ -695,37 +702,39 @@ export default function Admin() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {showDeleteConfirm === user.user_id ? (
-                              <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2">
+                              {showDeleteConfirm === user.user_id ? (
+                                <>
+                                  <button
+                                    onClick={() => handleDeleteUser(user.user_id)}
+                                    disabled={deletingUserId === user.user_id}
+                                    className="px-3 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {deletingUserId === user.user_id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin inline" />
+                                    ) : (
+                                      'Confirm'
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => setShowDeleteConfirm(null)}
+                                    disabled={deletingUserId === user.user_id}
+                                    className="px-3 py-1 text-xs bg-background/50 hover:bg-background/70 text-text-primary rounded transition-colors disabled:opacity-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
                                 <button
-                                  onClick={() => handleDeleteUser(user.user_id)}
-                                  disabled={deletingUserId === user.user_id}
-                                  className="px-3 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={() => handleHideUser(user.user_id)}
+                                  disabled={deletingUserId !== null}
+                                  className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Hide user from admin dashboard (doesn't delete from platform)"
                                 >
-                                  {deletingUserId === user.user_id ? (
-                                    <Loader2 className="w-3 h-3 animate-spin inline" />
-                                  ) : (
-                                    'Confirm'
-                                  )}
+                                  <Trash2 size={16} />
                                 </button>
-                                <button
-                                  onClick={() => setShowDeleteConfirm(null)}
-                                  disabled={deletingUserId === user.user_id}
-                                  className="px-3 py-1 text-xs bg-background/50 hover:bg-background/70 text-text-primary rounded transition-colors disabled:opacity-50"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => handleDeleteUser(user.user_id)}
-                                disabled={deletingUserId !== null}
-                                className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Delete user and all their data"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))

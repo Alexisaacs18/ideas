@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { X, FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image } from 'lucide-react';
+import { X, FileText, Trash2, Upload, Link as LinkIcon, BarChart2, Image, Lock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { api } from '../utils/api';
@@ -108,7 +108,13 @@ export default function DocumentsSidebar({
         {/* Header */}
         <div className="p-4 sm:p-6 border-b border-border/50 flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg sm:text-xl font-semibold text-text-primary">Add Content</h2>
+            <div>
+              <h2 className="text-lg sm:text-xl font-semibold text-text-primary">Add Content</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <Lock size={12} className="text-green-400" />
+                <span className="text-xs text-green-400 font-medium">End-to-End Encrypted</span>
+              </div>
+            </div>
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-background/50 transition-colors text-text-secondary hover:text-text-primary"

@@ -194,7 +194,10 @@ export const api = {
 
   async getDocuments(userId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/documents?user_id=${userId}`);
+      // Add cache-busting parameter to ensure fresh data from database
+      const response = await fetch(`${API_BASE_URL}/api/documents?user_id=${userId}&_t=${Date.now()}`, {
+        cache: 'no-store', // Prevent browser caching
+      });
       if (!response.ok) {
         // If it's a 500 error, it might be a database issue, but we'll return empty array
         if (response.status === 500) {
