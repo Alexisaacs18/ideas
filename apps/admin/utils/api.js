@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev';
+const ADMIN_API_BASE_URL = import.meta.env.VITE_ADMIN_API_URL || 'https://hidden-grass-22b6-admin.alexisaacs18.workers.dev';
 
 export const api = {
   async signup(email, password, name = null, anonymousUserId = null) {
@@ -334,7 +335,7 @@ export const api = {
 
   async deleteUser(userId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/delete`, {
+      const response = await fetch(`${ADMIN_API_BASE_URL}/api/admin/users/${userId}/delete`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -357,7 +358,7 @@ export const api = {
 
   async clearR2Documents() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/admin/r2/clear`, {
+      const response = await fetch(`${ADMIN_API_BASE_URL}/api/admin/r2/clear`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

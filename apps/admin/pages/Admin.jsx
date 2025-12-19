@@ -125,8 +125,8 @@ export default function Admin() {
   const loadStats = async () => {
     setIsLoadingStats(true);
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://hidden-grass-22b6.alexisaacs18.workers.dev';
-      const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
+      const ADMIN_API_BASE_URL = import.meta.env.VITE_ADMIN_API_URL || 'https://hidden-grass-22b6-admin.alexisaacs18.workers.dev';
+      const response = await fetch(`${ADMIN_API_BASE_URL}/api/admin/stats`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

@@ -8,7 +8,7 @@
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
 };
 
 // Utility: Add CORS headers to response
@@ -63,7 +63,7 @@ async function handleAdminStats(request, env) {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
           } 
         }
       );
@@ -234,7 +234,7 @@ async function handleAdminStats(request, env) {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
         } 
       }
     );
@@ -249,7 +249,7 @@ async function handleAdminStats(request, env) {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
         } 
       }
     );
@@ -403,12 +403,12 @@ export default {
     
     console.log('[Admin Worker] Request:', request.method, path);
     
-    // Admin worker ONLY handles /admin* paths
-    // If path doesn't start with /admin, return 404
-    if (!path.startsWith('/admin')) {
+    // Admin worker ONLY handles /admin* and /api/admin/* paths
+    // If path doesn't start with /admin or /api/admin, return 404
+    if (!path.startsWith('/admin') && !path.startsWith('/api/admin')) {
       console.log('[Admin Worker] Rejecting non-admin path:', path);
       return new Response(
-        JSON.stringify({ error: 'Not found - admin worker only handles /admin* paths' }),
+        JSON.stringify({ error: 'Not found - admin worker only handles /admin* and /api/admin/* paths' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
