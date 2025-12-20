@@ -146,8 +146,8 @@ export default function MainSidebar({
               onClick={onToggle}
               title="Menu"
               className={`
-                w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
-                ${isOpen ? 'justify-start' : 'justify-center'}
+                w-full flex items-center gap-2.5 py-2.5 rounded-md transition-all duration-150
+                ${isOpen ? 'justify-start px-3' : 'justify-center px-0'}
                 text-slate-400 hover:bg-slate-800 hover:text-slate-100
               `}
             >
@@ -165,8 +165,8 @@ export default function MainSidebar({
               }}
               title="Documents"
               className={`
-                w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
-                ${isOpen ? 'justify-start' : 'justify-center'}
+                w-full flex items-center gap-2.5 py-2.5 rounded-md transition-all duration-150
+                ${isOpen ? 'justify-start px-3' : 'justify-center px-0'}
                 ${activeSection === 'documents'
                   ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
@@ -188,8 +188,8 @@ export default function MainSidebar({
                     to="/"
                     title="Chats"
                     className={`
-                      flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
-                      ${isOpen ? 'justify-start' : 'justify-center'}
+                      flex-1 flex items-center gap-2.5 py-2.5 rounded-md transition-all duration-150
+                      ${isOpen ? 'justify-start px-3' : 'justify-center px-0'}
                       text-slate-400 hover:bg-slate-800 hover:text-slate-100
                     `}
                   >
@@ -201,8 +201,8 @@ export default function MainSidebar({
                     onClick={() => setChatsOpen(!chatsOpen)}
                     title="Chats"
                     className={`
-                      flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
-                      ${isOpen ? 'justify-between' : 'justify-center'}
+                      flex-1 flex items-center gap-2.5 py-2.5 rounded-md transition-all duration-150
+                      ${isOpen ? 'justify-between px-3' : 'justify-center px-0'}
                       ${activeSection === 'chats'
                         ? 'bg-slate-800 text-slate-100'
                         : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
@@ -293,8 +293,8 @@ export default function MainSidebar({
               }}
               title="Settings"
               className={`
-                w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
-                ${isOpen ? 'justify-start' : 'justify-center'}
+                w-full flex items-center gap-2.5 py-2.5 rounded-md transition-all duration-150
+                ${isOpen ? 'justify-start px-3' : 'justify-center px-0'}
                 ${activeSection === 'settings'
                   ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
@@ -312,8 +312,8 @@ export default function MainSidebar({
               }}
               title="Profile"
               className={`
-                w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-all duration-150
-                ${isOpen ? 'justify-start' : 'justify-center'}
+                w-full flex items-center gap-2.5 py-2.5 rounded-md transition-all duration-150
+                ${isOpen ? 'justify-start px-3' : 'justify-center px-0'}
                 ${activeSection === 'profile'
                   ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
