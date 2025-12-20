@@ -76,3 +76,135 @@ div[id^="react-hot-toast"] > div {
     overflow-wrap: break-word;
   }
 }
+
+/* iPhone/mobile responsive - ONLY affects max-width: 480px, desktop unchanged */
+@media (max-width: 480px) {
+  /* Typography - reduce font sizes */
+  h1 {
+    font-size: 18px !important;
+    line-height: 1.4 !important;
+  }
+  
+  h2 {
+    font-size: 16px !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* Reduce padding and margins for common spacing classes */
+  [class*="px-6"]:not([class*="sm:px-6"]) {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  
+  [class*="py-4"]:not([class*="sm:py-4"]) {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+  
+  [class*="px-3"]:not([class*="sm:px-3"]) {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  
+  [class*="py-3"]:not([class*="sm:py-3"]) {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+  
+  [class*="mb-4"]:not([class*="sm:mb-4"]) {
+    margin-bottom: 12px !important;
+  }
+  
+  [class*="mb-6"]:not([class*="sm:mb-6"]) {
+    margin-bottom: 20px !important;
+  }
+  
+  [class*="gap-2"]:not([class*="sm:gap-2"]) {
+    gap: 8px !important;
+  }
+  
+  [class*="gap-3"]:not([class*="sm:gap-3"]) {
+    gap: 12px !important;
+  }
+  
+  [class*="gap-4"]:not([class*="sm:gap-4"]) {
+    gap: 16px !important;
+  }
+  
+  /* Full-width buttons on mobile (except icon buttons) */
+  button:not([class*="w-"]):not([class*="h-"]):not([class*="p-"]):not([class*="rounded-full"]) {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Single column layout for grids */
+  [class*="grid"]:not([class*="sm:grid"]) {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Settings modal adjustments */
+  [class*="fixed"][class*="inset-0"] {
+    padding: 12px !important;
+  }
+  
+  [class*="max-w-600px"], [class*="max-w-\[600px\]"] {
+    max-width: calc(100% - 24px) !important;
+    width: calc(100% - 24px) !important;
+  }
+  
+  /* Ensure settings content is scrollable and visible */
+  [class*="max-h-\[80vh\]"] {
+    max-height: calc(100vh - 24px) !important;
+  }
+  
+  /* Chat area adjustments */
+  [class*="max-w-4xl"], [class*="max-w-7xl"] {
+    max-width: 100% !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  
+  /* Documents page header adjustments */
+  [class*="flex"][class*="items-center"][class*="justify-between"] {
+    flex-wrap: wrap !important;
+  }
+  
+  /* Ensure buttons in header don't break layout */
+  [class*="flex"][class*="items-center"][class*="justify-between"] > button {
+    width: auto !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* Documents page upload button - make it stack on very small screens */
+  [class*="flex"][class*="items-center"][class*="justify-between"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  
+  [class*="flex"][class*="items-center"][class*="justify-between"] > button:last-child {
+    width: 100% !important;
+  }
+  
+  /* Settings modal content padding */
+  [class*="p-6"]:not([class*="sm:p-6"]) {
+    padding: 12px !important;
+  }
+  
+  /* Text sizes */
+  [class*="text-2xl"]:not([class*="sm:text-2xl"]) {
+    font-size: 18px !important;
+  }
+  
+  [class*="text-lg"]:not([class*="sm:text-lg"]) {
+    font-size: 16px !important;
+  }
+  
+  [class*="text-sm"]:not([class*="sm:text-sm"]) {
+    font-size: 14px !important;
+  }
+  
+  [class*="text-xs"]:not([class*="sm:text-xs"]) {
+    font-size: 12px !important;
+  }
+}
