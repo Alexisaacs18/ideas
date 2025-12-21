@@ -677,29 +677,37 @@ async function handleSignup(request, env) {
       );
     }
     
-    const email = body.email.trim().toLowerCase();
+    // Allow username or email - lowercase only if it contains @
+    const loginIdentifier = body.email.trim();
+    const email = loginIdentifier.includes('@') 
+      ? loginIdentifier.toLowerCase() 
+      : loginIdentifier;
     
-    // Strong email validation regex
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    // Validate length (username/email must be at least 8 characters)
+    if (email.length < 8) {
       return new Response(
-        JSON.stringify({ error: 'Invalid email format. Please enter a valid email address.' }),
+        JSON.stringify({ error: 'Username or email must be at least 8 characters' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
     
-    // Additional validation: email must have a domain with at least one dot
-    const parts = email.split('@');
-    if (parts.length !== 2 || !parts[1].includes('.')) {
+    // Password validation (8 characters minimum)
+    if (body.password.length < 8) {
       return new Response(
-        JSON.stringify({ error: 'Invalid email format. Please enter a valid email address.' }),
+        JSON.stringify({ error: 'Password must be at least 8 characters' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
     
-    if (body.password.length < 6) {
+    // Password complexity validation (signup only)
+    const hasCapital = /[A-Z]/.test(body.password);
+    const hasLowercase = /[a-z]/.test(body.password);
+    const hasNumber = /[0-9]/.test(body.password);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(body.password);
+    
+    if (!hasCapital || !hasLowercase || !hasNumber || !hasSymbol) {
       return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
+        JSON.stringify({ error: 'Password must contain at least one capital letter, lowercase letter, number, and symbol' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -785,16 +793,11 @@ async function handleLogin(request, env) {
       );
     }
     
-    const email = body.email.trim().toLowerCase();
-    
-    // Validate email format for login too
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid email format. Please enter a valid email address.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    // Allow username or email - lowercase only if it contains @
+    const loginIdentifier = body.email.trim();
+    const email = loginIdentifier.includes('@') 
+      ? loginIdentifier.toLowerCase() 
+      : loginIdentifier;
     
     // Get user from database
     const user = await env.DB.prepare(
@@ -864,13 +867,11 @@ async function handleRegister(request, env) {
       );
     }
     
-    const email = body.email.trim().toLowerCase();
-    if (!email.includes('@')) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid email format' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    // Allow username or email - lowercase only if it contains @
+    const loginIdentifier = body.email.trim();
+    const email = loginIdentifier.includes('@') 
+      ? loginIdentifier.toLowerCase() 
+      : loginIdentifier;
     
     // Use provided userId or check by email
     const providedUserId = body.user_id;
