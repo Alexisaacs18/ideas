@@ -270,6 +270,20 @@ function cleanText(text) {
     .trim();
 }
 
+// Utility: Serve Single Page Application - maps routes without file extensions to index.html
+function serveSinglePageApp(request) {
+  const parsedUrl = new URL(request.url);
+  const pathname = parsedUrl.pathname;
+
+  // If path has a file extension (like .js, .css, .png, .svg, etc.), serve it normally
+  if (pathname.match(/\.[a-z0-9]+$/i)) {
+    return request;
+  }
+
+  // Otherwise, serve index.html (for SPA routing like /documents, /, etc.)
+  return new Request(`${parsedUrl.origin}/index.html`, request);
+}
+
 // Utility: Extract text from PDF using CDN version of pdfjs-serverless
 async function extractTextFromPDF(arrayBuffer) {
   try {
@@ -2394,37 +2408,40 @@ export default {
         // Check if ASSETS binding exists (for static file serving)
         if (env.ASSETS) {
           try {
-            // Check if this is a file request (has extension) or a route (SPA route like /admin, /documents)
-            const hasFileExtension = path.includes('.') && !path.endsWith('/');
+            // Use serveSinglePageApp to map routes without file extensions to index.html
+            const mappedRequest = serveSinglePageApp(request);
+            const assetResponse = await env.ASSETS.fetch(mappedRequest);
             
-            if (hasFileExtension) {
-              // It's a file request - try to fetch the actual file
-              const assetResponse = await env.ASSETS.fetch(request);
-              if (assetResponse.status === 200) {
-                return assetResponse;
-              }
-              // File not found - return 404
+            // If asset found, return it
+            if (assetResponse.status === 200) {
               return assetResponse;
-            } else {
-              // It's a SPA route (like /documents, /) - serve index.html
-              // Note: /admin* routes are handled by admin-worker via routing
-              console.log('[Public Worker] Serving index.html for SPA route:', path);
+            }
+            
+            // If asset not found and it's not already index.html, try serving index.html
+            if (!path.endsWith('/index.html') && !path.endsWith('index.html')) {
               const indexRequest = new Request(new URL('/index.html', request.url), request);
               const indexResponse = await env.ASSETS.fetch(indexRequest);
               if (indexResponse.status === 200) {
-                return indexResponse;
+                return new Response(indexResponse.body, {
+                  ...indexResponse,
+                  status: 200,
+                });
               }
-              // index.html not found - return 404
-              return new Response('index.html not found', { status: 404 });
             }
+            
+            // Return the original response (404)
+            return assetResponse;
           } catch (error) {
             console.error('Error serving static file:', error);
-            // Fall through to serve index.html as fallback
+            // Fallback: try to serve index.html
             try {
               const indexRequest = new Request(new URL('/index.html', request.url), request);
               const indexResponse = await env.ASSETS.fetch(indexRequest);
               if (indexResponse.status === 200) {
-                return indexResponse;
+                return new Response(indexResponse.body, {
+                  ...indexResponse,
+                  status: 200,
+                });
               }
             } catch (e) {
               console.error('Error serving index.html fallback:', e);

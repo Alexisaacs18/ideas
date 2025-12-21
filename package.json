@@ -11,7 +11,7 @@
 		"build": "npm run build:public && npm run build:admin",
 		"build:public": "npm run copy-logo && vite build --config vite.config.public.js",
 		"build:admin": "npm run copy-logo && vite build --config vite.config.admin.js",
-		"copy-logo": "cp logo.svg apps/public/logo.svg && cp logo.svg apps/admin/logo.svg || true",
+		"copy-logo": "cp logo.svg apps/public/logo.svg && cp logo.svg apps/admin/logo.svg && cp public/logo.png apps/public/logo.png && cp public/logo.png apps/admin/logo.png || true",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
 		"deploy": "npm run build:public && wrangler deploy",
