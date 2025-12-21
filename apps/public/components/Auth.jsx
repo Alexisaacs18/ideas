@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Lock, User as UserIcon, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, Loader2, Eye, EyeOff, Info } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'react-hot-toast';
 
@@ -11,6 +11,7 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showPasswordInfo, setShowPasswordInfo] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -203,30 +204,53 @@ export default function Auth({ isOpen, onClose, onAuthSuccess }) {
             />
           </div>
 
-          <div className="flex items-center gap-3 px-4 py-3 bg-background/50 border border-border rounded-lg focus-within:border-indigo-500/50 transition-colors">
-            <Lock size={18} className="text-text-secondary flex-shrink-0" />
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              disabled={isLoading}
-              className="flex-1 bg-transparent border-none outline-none text-text-primary text-sm placeholder:text-text-secondary"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="text-text-secondary hover:text-text-primary transition-colors"
-              tabIndex={-1}
-            >
-              {showPassword ? (
-                <EyeOff size={18} className="flex-shrink-0" />
-              ) : (
-                <Eye size={18} className="flex-shrink-0" />
+          <div className="relative">
+            <div className="flex items-center gap-3 px-4 py-3 bg-background/50 border border-border rounded-lg focus-within:border-indigo-500/50 transition-colors">
+              <Lock size={18} className="text-text-secondary flex-shrink-0" />
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                disabled={isLoading}
+                className="flex-1 bg-transparent border-none outline-none text-text-primary text-sm placeholder:text-text-secondary"
+              />
+              {isSignUp && (
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordInfo(!showPasswordInfo)}
+                  className="text-text-secondary hover:text-text-primary transition-colors relative"
+                  tabIndex={-1}
+                  title="Password requirements"
+                >
+                  <Info size={18} className="flex-shrink-0" />
+                </button>
               )}
-            </button>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-text-secondary hover:text-text-primary transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff size={18} className="flex-shrink-0" />
+                ) : (
+                  <Eye size={18} className="flex-shrink-0" />
+                )}
+              </button>
+            </div>
+            {isSignUp && showPasswordInfo && (
+              <div className="mt-2 px-4 py-3 bg-background/80 border border-border rounded-lg text-xs text-text-secondary space-y-1.5">
+                <p className="font-medium text-text-primary mb-1.5">Password requirements:</p>
+                <p>• At least 8 characters</p>
+                <p>• One capital letter (A-Z)</p>
+                <p>• One lowercase letter (a-z)</p>
+                <p>• One number (0-9)</p>
+                <p>• One symbol (!@#$%^&*...)</p>
+              </div>
+            )}
           </div>
 
           {isSignUp && (
